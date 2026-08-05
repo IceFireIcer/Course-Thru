@@ -1,0 +1,6 @@
+{
+  "defaultUrl": "",
+  "extraArgs": [],
+  "appName": "BrowserForLazy",
+  "extensions": ["extensions/scriptcat"]
+}
