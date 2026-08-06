@@ -1,6 +1,6 @@
 # Course-Thru（课速通）交接文档（更新版）
 
-> 更新时间：2026-08-05（第二阶段交接，含微调与收尾）
+> 更新时间：2026-08-06（第三阶段交接：改名上线与首次推送）
 > 项目：Course-Thru（课速通）— 基于 Chromium + ScriptCat + OCS 的刷网课浏览器（Windows）
 > 阅读顺序：先读 README.md 了解使用方式，再读本文了解来龙去脉与当前状态。
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 二、两阶段工作回顾
+## 二、三阶段工作回顾
 
 ### 阶段一：从零搭建（已完成）
 
@@ -48,17 +48,25 @@
 10. **全链路从零构建验证通过**（2026-08-06）：清空产物与缓存后，build.ps1 重新下载全部组件 → 生成 profile_seed → 打包安装版，端到端实测（扩展加载、OCS 预置启用、开发者模式开启、无欢迎页、无扩展错误）全部通过。
 11. **修复「启动弹出 8 个窗口」**（2026-08-06）：根因是种子携带了生成流程的会话恢复数据（`Default\Sessions` / `Sessions_Encrypted`），用户首启时 Chromium 恢复出生成期间打开的 options 页、扩展详情页、脚本猫更新日志/引导页（还有重复）。修复：`gen-profile.mjs` 生成结束时清理会话数据、`build.ps1` 组装种子时兜底清理、`main.go` 首次运行复制种子后同样清理（三重保险）。实测启动只打开 1 个 `about:blank`。
 
+### 阶段三：改名上线与首次推送（2026-08-06）
+
+1. **项目改名 Course-Thru（课速通）**：全仓库名称替换（产物 `Course-Thru.exe` / `Course-ThruSetup.exe`、安装目录 `%LOCALAPPDATA%\Course-Thru`、Go 模块 `coursethru/launcher`、`config.json` 的 `appName`、错误弹窗标题、首次运行标记内容），源码与文档零残留旧名；**README 全面重写**。
+2. **首次推送 GitHub**：远程 `origin = https://github.com/IceFireIcer/Course-Thru-NBCC.git`，`main` 分支已推送并设置上游跟踪，工作区干净。提交历史：`f0423da` 初始搭建 → `42a45c4` 交接文档 → `df785ab` 改名与重构。
+3. **build.ps1 编码约定**：**必须保持 UTF-8 BOM**——PowerShell 5.1 读取含中文的脚本依赖 BOM 才能正确解码；去 BOM 会导致「Missing ')'」解析错误。若用编辑器/补丁工具改完丢失 BOM，需补回（`EF BB BF` 前缀）。
+4. **物理文件夹名**：磁盘目录仍为 `browserForLazy`（当前工作区根路径，改名会导致会话失效），未改动；如需要可手动重命名为 `Course-Thru`（不影响 git 内容）。
+5. **安装器 AppId**：改名时保留了原 GUID（`F8E1B0C4-...`），保证旧版本升级/卸载路径兼容。
+
 ---
 
-## 三、项目当前状态（2026-08-05 实测）
+## 三、项目当前状态（2026-08-06 实测）
 
 ### 构建产物
 
 | 产物 | 位置 | 说明 |
 |---|---|---|
-| 便携版 | `Build-Product\portable\`（约 483 MB） | 已包含用户再次使用生成的 `profile/` 与 `first_run.flag`，开箱即用 |
+| 便携版 | `Build-Product\portable\`（约 466 MB） | **干净出厂态**（无用户 profile 数据），首次启动自动生成 `profile/` 与 `first_run.flag` |
 | 安装版 | `Build-Product\Course-ThruSetup.exe`（约 150 MB） | Inno Setup 安装包，安装到 `%LOCALAPPDATA%\Course-Thru` |
-| 工作输出 | `dist/`（465 MB）、`dist-installer/` | `build.ps1` 的标准输出目录，内容与 Build-Product 一致 |
+| 工作输出 | `dist/`（约 466 MB）、`dist-installer/` | `build.ps1` 的标准输出目录，内容与 Build-Product 一致 |
 
 ### 组件版本（build.ps1 顶部固定，保证可复现）
 
@@ -74,8 +82,9 @@
 
 ### git 状态
 
-- main 分支，2 个提交（`f0423da` 初始提交、`42a45c4` 交接文档），**未推送 GitHub**
-- 工作区改动：`build.ps1`、`main.go`、`.gitignore`（已修改未提交）；`AGENTS.md`（未跟踪）
+- main 分支，3 个提交（`f0423da` 初始搭建、`42a45c4` 交接文档、`df785ab` 改名与重构），**已推送 GitHub**
+- 远程：`origin = https://github.com/IceFireIcer/Course-Thru-NBCC.git`，`main` 已跟踪 `origin/main`，**工作区干净**
+- 提交身份：`IceFireIcer <icefire_icer@outlook.com>`
 - `.tools/`、`.agents/`、`.claude/`、`skills-lock.json`、`dist/`、`dist-installer/`、`Build-Product/`、私钥均被 gitignore
 
 ### 清理动作的实际状态（重要，未决事项）
@@ -99,9 +108,9 @@
 
 | 文件 | 职责 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/` → 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**本轮修改**：首次启动写 `first_run.flag` 并通过 CDP 自动关闭 ScriptCat 欢迎页；后续启动不带调试参数。 |
+| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**本轮修改**：首次启动写 `first_run.flag` 并通过 CDP 自动关闭 ScriptCat 欢迎页；后续启动不带调试参数。 |
 | `go.mod` | Go 模块定义（`coursethru/launcher`，go 1.26）。 |
-| `build.ps1` | 一键构建：下载固定版本组件 → 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 编译启动器 → 生成/复用预置 profile → 写 `config.json` → 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。 |
+| `build.ps1` | 一键构建：下载固定版本组件（直连失败自动回退系统代理）→ 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 编译启动器 → 生成/复用预置 profile → 写 `config.json` → 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。**注意：文件必须保持 UTF-8 BOM（PowerShell 5.1 中文脚本依赖）**。 |
 | `gen-profile.mjs` | CDP 驱动真实 Chromium 生成预置 profile：**直接写入 ScriptCat 存储预置 OCS（默认启用）**，开启开发者模式与 userScripts 开关，关闭→重启→自动验证。信号驱动（DOM 条件等待），无固定 sleep。由 `build.ps1` 调用。 |
 | `extensions/ocs.user.js` | OCS 网课助手脚本（4.15.3），**本地维护、随仓库入库**；构建时复制进产物，由 `gen-profile.mjs` 预置到 ScriptCat 存储并默认启用。 |
 | `installer.iss` | Inno Setup 安装脚本：把 `dist/` 内容装到 `{app}`，创建快捷方式，卸载时调用 `stop-browser.ps1` 并删除应用目录。 |
@@ -114,7 +123,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `README.md` | 使用与构建文档（特性、目录结构、构建命令、常见问题）。 |
+| `README.md` | 使用与构建文档（特性、目录结构、构建命令、常见问题）。已按 Course-Thru（课速通）重写。 |
 | `AGENTS.md` | 贡献者指南（项目结构、构建/测试命令、代码风格、测试与提交约定、密钥安全）。**本轮新增**。 |
 | `HANDOVER.md` | 本文档。 |
 
@@ -179,7 +188,7 @@ Copy-Item -Path 'dist\*' -Destination 'Build-Product\portable' -Recurse -Force
 Copy-Item -LiteralPath 'dist-installer\Course-ThruSetup.exe' -Destination 'Build-Product\Course-ThruSetup.exe' -Force
 ```
 
-验证要点：首次启动生成 `profile/` 与 `first_run.flag`；任何启动都不出现 `docs.scriptcat.org/docs/use/install_comple` 页；扩展 ID 保持 `hodgdaljmnbiliahlpcjcpiphnkbmfff`。
+验证要点：首次启动生成 `profile/` 与 `first_run.flag`，且**只打开 1 个 `about:blank`**（无多余会话窗口）；任何启动都不出现 `docs.scriptcat.org` 相关页面（install_comple / changelog / open-dev）；扩展 ID 保持 `hodgdaljmnbiliahlpcjcpiphnkbmfff`。
 
 ---
 
@@ -192,6 +201,7 @@ Copy-Item -LiteralPath 'dist-installer\Course-ThruSetup.exe' -Destination 'Build
 | `gen-profile.mjs` 时序/流程 | ✅ 已修复 | 已改为信号驱动 + 直接存储注入（无服务器、无 UI 点击安装）；`profile_seed` 已用新流程重新生成并端到端验证（OCS 预置启用、开发者模式开启、无欢迎页、无扩展错误、跨路径可移植） |
 | 组件版本升级 | 📋 待办 | 改 `build.ps1` 顶部版本号 + 重新生成 `profile_seed` |
 | 默认网课平台 | 📋 待办 | `config.json` 的 `defaultUrl` 留空 |
-| 推送 GitHub | 📋 待办 | 未推送；需配置远端地址 |
+| 推送 GitHub | ✅ 已完成 | `origin = https://github.com/IceFireIcer/Course-Thru-NBCC.git`，main 分支已推送（3 个提交） |
 | 私钥安全备份 | 📋 建议 | 把 `keys\scriptcat_private.pem` 备份到仓库外安全位置 |
 | 应用图标 | 💡 可选 | 启动器与安装包用默认图标 |
+| 物理文件夹改名 | 💡 可选 | 磁盘目录仍为 `browserForLazy`（工作区根路径未动），需要时可手动改名为 `Course-Thru` |
