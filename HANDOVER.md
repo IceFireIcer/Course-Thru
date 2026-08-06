@@ -165,6 +165,7 @@ unpacked 扩展的 ID 只由 manifest 里的公钥派生，加载时不校验签
 4. **预置 profile**：userScripts 开关与脚本数据在 `chrome.storage.local`（LevelDB），构建时用真实 Chromium 配好打包为 `profile_seed`。
 5. **不能用 `--disable-extensions-except`**：会触发 Chromium「先禁用全部扩展再重启」流程，首次启动报错。
 6. **Inno Setup 替代 NSIS**：NSIS 官方二进制仅 SourceForge 托管，国内不可达。
+7. **抑制 CfT 测试横幅**：Chromium for Testing 顶部会固定显示「仅适用于自动测试」黄色横幅，启动参数带 `--disable-infobars` 即可隐藏（CfT 2023-11 起支持该开关），已加入 main.go 默认参数。
 
 ---
 

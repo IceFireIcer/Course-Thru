@@ -66,6 +66,8 @@ func main() {
 		fmt.Sprintf("--user-data-dir=%s", profileDir),
 		"--no-first-run",
 		"--no-default-browser-check",
+		// 抑制 Chrome for Testing 的"仅用于自动化测试"横幅（--disable-infobars 对 CfT 有效）
+		"--disable-infobars",
 	}
 	for _, ext := range cfg.Extensions {
 		extPath := filepath.Join(exeDir, filepath.FromSlash(ext))
