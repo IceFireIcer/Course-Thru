@@ -136,6 +136,15 @@ if (-not $mf.key -or $mf.key -ne $ScriptCatKey) {
 $ocsDist = Join-Path (Split-Path $extDir -Parent) "ocs.user.js"
 Copy-Item -LiteralPath $ocsFile -Destination $ocsDist -Force
 
+# 打包百度默认搜索引擎扩展（chrome_settings_overrides 把默认搜索引擎设为百度，
+# 这是未托管机器上唯一可靠的方式：DefaultSearchProvider* 策略在未加入域的机器上会被忽略）。
+$baiduExt = Join-Path $Root "extensions\baidu-search"
+if (-not (Test-Path (Join-Path $baiduExt "manifest.json"))) {
+    Fail "缺少默认搜索引擎扩展 $baiduExt\manifest.json"
+}
+$baiduDist = Join-Path $Dist "extensions\baidu-search"
+Copy-Item -LiteralPath $baiduExt -Destination $baiduDist -Recurse -Force
+
 # 屏蔽 ScriptCat 安装成功欢迎页：unpacked 扩展每次启动都会触发
 # onInstalled(reason=install)，不屏蔽则每次打开浏览器都会弹出安装完成页。
 # 只把条件改为恒 false 以保留代码结构；若未来版本改动该段代码则警告。
@@ -218,7 +227,7 @@ $config = @{
     defaultUrl = ""
     extraArgs  = @()
     appName    = "Course-Thru"
-    extensions = @("extensions/scriptcat")
+    extensions = @("extensions/scriptcat", "extensions/baidu-search")
 } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Dist "config.json"), $config)
 

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "百度默认搜索",
+  "version": "1.0.0",
+  "description": "将默认搜索引擎设为百度（Course-Thru 内置）",
+  "chrome_settings_overrides": {
+    "search_provider": {
+      "name": "百度",
+      "keyword": "baidu.com",
+      "search_url": "https://www.baidu.com/s?wd={searchTerms}",
+      "suggest_url": "https://www.baidu.com/sugrec?prod=pc&wd={searchTerms}",
+      "favicon_url": "https://www.baidu.com/favicon.ico",
+      "encoding": "UTF-8",
+      "is_default": true
+    }
+  }
+}

@@ -6954,7 +6954,6 @@ ${content}</tr>
   var compare_1 = compare$1;
   const compare = compare_1;
   const gt = (a, b, loose) => compare(a, b, loose) > 0;
-  var gt_1 = gt;
   const SemVer = semver;
   const parse$1 = (version, options, throwErrors = false) => {
     if (version instanceof SemVer) {
@@ -6975,7 +6974,6 @@ ${content}</tr>
     const v = parse(version, options);
     return v ? v.version : null;
   };
-  var valid_1 = valid;
   const RenderScript = lib.createRenderScript({
     name: "🖼️ 窗口设置"
   });
@@ -7365,113 +7363,6 @@ ${content}</tr>
             } catch (e) {
               console.error(e);
               this.cfg.sync_status = "unconnect";
-            }
-          }
-        }
-      }),
-      update: new lib.Script({
-        name: "📥 更新模块",
-        matches: [["所有页面", /.*/]],
-        namespace: "background.update",
-        configs: {
-          notes: {
-            defaultValue: "脚本自动更新模块，如果有新的版本会自动通知。"
-          },
-          autoNotify: {
-            defaultValue: true,
-            label: "开启更新通知",
-            attrs: { type: "checkbox", title: "当有最新的版本时自动弹窗通知，默认开启" }
-          },
-          notToday: {
-            defaultValue: -1
-          },
-          ignoreVersions: {
-            defaultValue: []
-          }
-        },
-        methods() {
-          return {
-            getLastVersion: async () => {
-              return await request("https://cdn.ocsjs.com/ocs-version.json?t=" + Date.now(), {
-                method: "get",
-                type: "GM_xmlhttpRequest"
-              });
-            }
-          };
-        },
-        async onrender({ panel }) {
-          var _a;
-          const version = await this.methods.getLastVersion();
-          const infos = lib.$gm.getInfos();
-          if (!infos) {
-            return;
-          }
-          const changeLog = lib.h("button", { className: "base-style-button-secondary" }, "📄查看更新日志");
-          changeLog.onclick = () => CommonProject.scripts.apps.methods.showChangelog();
-          const updatePage = ((_a = this.startConfig) == null ? void 0 : _a.updatePage) || "";
-          panel.body.replaceChildren(
-            lib.h("div", { className: "card" }, [
-              lib.h("hr"),
-              lib.h("div", ["最新版本：" + version["last-version"] + " - ", changeLog]),
-              lib.h("hr"),
-              lib.h("div", "当前版本：" + infos.script.version),
-              lib.h("div", "脚本管理器：" + infos.scriptHandler),
-              lib.h("div", ["脚本更新链接：", lib.h("a", { target: "_blank", href: updatePage }, [updatePage || "无"])])
-            ])
-          );
-          console.log("versions", {
-            notToday: this.cfg.notToday,
-            ignoreVersions: this.cfg.ignoreVersions,
-            version
-          });
-        },
-        oncomplete() {
-          if (this.cfg.autoNotify && lib.$.isInTopWindow()) {
-            if (this.cfg.notToday === -1 || this.cfg.notToday !== new Date().getDate()) {
-              const infos = lib.$gm.getInfos();
-              if (infos) {
-                if (!!valid_1(infos.script.version) === false) {
-                  lib.$message.error(`当前版本号 (${infos.script.version}) 不符合semver版本书写规范，请重新修改版本。`);
-                  return;
-                }
-                setTimeout(async () => {
-                  var _a;
-                  const version = await this.methods.getLastVersion();
-                  const last = version["last-version"];
-                  if (this.cfg.ignoreVersions.includes(last) === false && gt_1(last, infos.script.version)) {
-                    const updatePage = ((_a = this.startConfig) == null ? void 0 : _a.updatePage) || "";
-                    const modal2 = lib.$modal.confirm({
-                      maskCloseable: false,
-                      width: 600,
-                      content: lib.$ui.notes([`检测到新版本发布 ${last} ：`, [...version.notes || []]]),
-                      footer: lib.h("div", [
-                        lib.h("button", { className: "base-style-button-secondary", innerText: "跳过此版本" }, (btn) => {
-                          btn.onclick = () => {
-                            this.cfg.ignoreVersions = [...this.cfg.ignoreVersions, last];
-                            modal2 == null ? void 0 : modal2.remove();
-                          };
-                        }),
-                        lib.h("button", { className: "base-style-button-secondary", innerText: "今日不再提示" }, (btn) => {
-                          btn.onclick = () => {
-                            this.cfg.notToday = new Date().getDate();
-                            modal2 == null ? void 0 : modal2.remove();
-                          };
-                        }),
-                        lib.h("button", { className: "base-style-button", innerText: "前往更新" }, (btn) => {
-                          btn.onclick = () => {
-                            if (updatePage) {
-                              window.open(updatePage, "_blank");
-                              modal2 == null ? void 0 : modal2.remove();
-                            } else {
-                              lib.$message.error({ content: "无法前往更新页面，更新链接为空" });
-                            }
-                          };
-                        })
-                      ])
-                    });
-                  }
-                }, 5 * 1e3);
-              }
             }
           }
         }
@@ -9552,28 +9443,6 @@ ${content}</tr>
               }
               return results;
             },
-            async showChangelog() {
-              const changelog = lib.h("div", {
-                className: "markdown card",
-                innerHTML: "加载中...",
-                style: { maxWidth: "600px" }
-              });
-              lib.$modal.simple({
-                width: 600,
-                content: lib.h("div", [
-                  lib.h("div", { className: "notes card" }, [
-                    lib.$ui.notes(["此页面实时更新，遇到问题可以查看最新版本是否修复。"])
-                  ]),
-                  changelog
-                ])
-              });
-              const md = await request("https://cdn.ocsjs.com/articles/ocs/changelog.md?t=" + Date.now(), {
-                type: "GM_xmlhttpRequest",
-                responseType: "text",
-                method: "get"
-              });
-              changelog.innerHTML = markdown(md);
-            }
           };
         },
         onrender({ panel }) {
@@ -9852,8 +9721,6 @@ ${content}</tr>
     gotoHome.onclick = () => window.open("https://docs.ocsjs.com", "_blank");
     const contactUs = lib.h("button", { className: "base-style-button-secondary" }, "🗨️交流群");
     contactUs.onclick = () => window.open("https://docs.ocsjs.com/docs/about#交流方式", "_blank");
-    const changeLog = lib.h("button", { className: "base-style-button-secondary" }, "📄更新日志");
-    changeLog.onclick = () => CommonProject.scripts.apps.methods.showChangelog();
     const closeGuide = lib.h("button", { className: "base-style-button-secondary" }, "📄如何关闭脚本？");
     closeGuide.onclick = () => window.open("https://docs.ocsjs.com/docs/script#%E5%85%B3%E9%97%AD%E8%84%9A%E6%9C%AC%E6%95%99%E7%A8%8B", "_blank");
     const cardStyle = {
@@ -9884,7 +9751,6 @@ ${content}</tr>
         lib.h("div", { style: { marginBottom: "8px", fontWeight: "bold" } }, "🌐快捷访问："),
         gotoHome,
         contactUs,
-        changeLog,
         closeGuide
       ])
     ]);
@@ -21276,6 +21142,5 @@ const infos = GM_info;
 			defaultPanelName: CommonProject.scripts.guide.namespace,
 			title: `OCS-${infos.script.version}`
 		},
-		updatePage: 'https://docs.ocsjs.com/docs/update'
 	});
 })();
