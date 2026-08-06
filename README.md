@@ -1,28 +1,28 @@
-# BrowserForLazy 刷网课浏览器
+# Course-Thru（课速通）
 
-基于 **Chromium for Testing** + **ScriptCat（脚本猫）** 的刷网课浏览器。预置了 ScriptCat 扩展和 **OCS 网课助手** 脚本，**打开即用**，无需手动安装扩展和脚本。
+基于 **Chromium for Testing** + **ScriptCat（脚本猫）** + **OCS 网课助手** 的 Windows 刷网课浏览器，**打开即用**，无需手动安装扩展和脚本。
 
 只面向 **Windows 平台**。
 
 ## 特性
 
-- 🧩 **预置 ScriptCat**：通过 `--load-extension` 免安装加载，扩展 ID 固定（注入独立 key），并已开启「允许运行用户脚本」
-- 📜 **预置 OCS 网课助手 4.15.3**：支持超星学习通、知到智慧树、职教云、智慧职教、中国大学MOOC、雨课堂等平台的自动刷课
-- ⚡ **开箱即用**：预置 profile 已开启 `userScripts` 开关、已安装 OCS 脚本，首次启动自动部署
-- 🚀 **启动器**：独立开发的 Windows 程序，负责首次部署预置数据并带参启动浏览器
+- 🧩 **预置 ScriptCat**：通过 `--load-extension` 免安装加载，注入固定 key 使扩展 ID 恒定（`hodgdaljmnbiliahlpcjcpiphnkbmfff`）
+- 📜 **预置 OCS 网课助手 4.15.3**：脚本直接写入 ScriptCat 存储并**默认启用**，支持超星学习通、知到智慧树、职教云、智慧职教、中国大学MOOC、雨课堂等平台
+- ⚡ **开箱即用**：预置 profile 已开启「开发者模式」与「允许运行用户脚本」，OCS 已就绪；首次启动不弹任何引导页/信任提示
+- 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
 
 ## 使用
 
 ### 方式一：安装版（推荐给最终用户）
 
-运行 `BrowserForLazySetup.exe`，安装完成后双击桌面快捷方式（或开始菜单 `BrowserForLazy`）即可。
+运行 `Course-ThruSetup.exe`，安装完成后双击桌面快捷方式（或开始菜单 `Course-Thru`）即可。
 
 打开支持的网课平台（如超星学习通 `chaoxing.com`），进入课程页面后 OCS 网课助手会自动运行。
 
 ### 方式二：便携版（开发/测试用）
 
-`dist/` 目录是完整的便携目录，直接双击 `dist\BrowserForLazy.exe` 即可使用。
+`dist/` 目录是完整的便携目录，直接双击 `dist\Course-Thru.exe` 即可使用。
 
 ## 配置文件 `config.json`（默认页预留接口）
 
@@ -32,7 +32,7 @@
 {
   "defaultUrl": "",
   "extraArgs": [],
-  "appName": "BrowserForLazy",
+  "appName": "Course-Thru",
   "extensions": ["extensions/scriptcat"]
 }
 ```
@@ -49,45 +49,49 @@
 ## 目录结构
 
 ```
+main.go / go.mod                # Go 启动器源码（GUI 子系统）
+build.ps1                       # 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译 → 打包
+gen-profile.mjs                 # CDP 生成预置 profile（直接写入 ScriptCat 存储预置 OCS，默认启用）
+installer.iss                   # Inno Setup 安装脚本
+stop-browser.ps1                # 卸载时关闭本程序浏览器进程
+keys/scriptcat.key              # 扩展固定 key（勿删，删除会改变扩展 ID）
+extensions/ocs.user.js          # OCS 网课助手脚本（本地维护，构建时打包进产物）
+config.json.example             # 配置示例（默认页接口）
+
 dist/                           # 便携发布目录（构建产物）
-├── BrowserForLazy.exe          # 启动器
+├── Course-Thru.exe             # 启动器
 ├── config.json                 # 配置（默认页接口）
 ├── chrome/                     # Chromium for Testing
-├── extensions/scriptcat/       # ScriptCat 扩展（注入固定 key）
-├── profile_seed/               # 预置 profile（含 userScripts 开关 + OCS 脚本）
+├── extensions/                 # ScriptCat 扩展 + ocs.user.js
+├── profile_seed/               # 预置 profile（开发者模式 + userScripts 开关 + OCS 已预置启用）
 └── profile/                    # 运行时 profile（首次启动由启动器从 profile_seed 复制）
-src/
-├── launcher/                   # Go 启动器源码
-├── build/
-│   ├── build.ps1               # 一键构建脚本
-│   ├── installer.iss           # Inno Setup 安装脚本
-│   ├── stop-browser.ps1        # 卸载时关闭本程序浏览器进程
-│   └── keys/scriptcat.key      # 扩展固定 key（勿删，删除会改变扩展 ID）
-└── tools/
-    └── gen-profile.mjs         # CDP 自动化生成预置 profile
 .tools/                         # 构建缓存（下载的组件）
 dist-installer/                 # 安装包输出目录
+Build-Product/                  # 交付汇总（portable/ 便携版 + Course-ThruSetup.exe 安装版）
 ```
 
 ## 从源码构建
 
-需要：Windows + node.js + 网络（GitHub、npmmirror 可达）。
+需要：Windows + node.js + 网络（GitHub、npmmirror 可达；有系统代理时自动回退使用）。
 
 ```powershell
-# 一键构建：下载组件 → 注入 key → 编译启动器 → 生成预置 profile → 打包安装版
-powershell -ExecutionPolicy Bypass -File src\build\build.ps1
+# 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译启动器 → 打包安装版
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
 - 首次构建会下载 Chromium（约 160MB）与 Go SDK，后续构建自动复用 `.tools` 缓存
-- 组件版本固定（Chromium 152、ScriptCat v1.4.0、OCS 4.15.3），保证可复现
+- 组件版本固定（Chromium 152、ScriptCat v1.4.0、OCS 4.15.3），保证可复现；OCS 脚本本地维护（`extensions/ocs.user.js`），不依赖 GitHub 下载
 - `-SkipProfile` 跳过预置 profile 生成（复用已有 `dist\profile_seed`）
 - `-NoNsis` 跳过安装包（只产出便携 `dist`）
 
 ## 技术说明
 
-- **为什么用 Chromium for Testing 而非 Electron**：ScriptCat 依赖 `chrome.userScripts` API，Electron 不支持该 API（只支持 `chrome.scripting` 等子集），会导致脚本无法注入。Chromium（非 Chrome 品牌版）完全支持，且 `--load-extension` 命令行参数在 Chromium 上依然可用（Chrome 137 起仅 Google Chrome 品牌版移除了该参数）
+- **为什么用 Chromium for Testing 而非 Electron**：ScriptCat 依赖 `chrome.userScripts` API，Electron 不支持该 API（只支持 `chrome.scripting` 等子集），会导致脚本无法注入页面。Chromium（非 Chrome 品牌版）完全支持，且 `--load-extension` 命令行参数在 Chromium 上依然可用（Chrome 137 起仅 Google Chrome 品牌版移除了该参数）
 - **为什么注入 key**：unpacked 扩展无 `key` 字段时 ID 由安装路径决定，路径一变脚本数据就丢了。注入固定 key 后 ID 恒定（`hodgdaljmnbiliahlpcjcpiphnkbmfff`），预置数据可随 profile 移植
 - **为什么预置 profile**：ScriptCat 的 userScripts 开关与脚本数据存在扩展的 `chrome.storage.local`（LevelDB），构建时用真实 Chromium 配置好后打包，用户首次启动复制即开箱即用
+- **OCS 直接预置**：OCS 是 ScriptCat 的油猴脚本，生成 profile 时直接写入 ScriptCat 存储（`script:<uuid>` 元数据 + `scriptCode:<uuid>` 代码，`status:1` 默认启用），无需模拟点击安装，也不依赖网络
+- **开发者模式默认开启**：生成 profile 时通过 CDP 点击 chrome://extensions 的真实开关并持久化，首次启动不弹「开启开发者模式」信任提示
+- **首次启动只开一个空白页**：生成流程的窗口会话数据已从种子中清理（三重保险：gen-profile、build.ps1、启动器），不会恢复出多余标签页
 - **不能加 `--disable-extensions-except`**：该参数会触发 Chromium「先禁用全部扩展再重启进程」流程，首次启动会弹「加载扩展程序时候出错」并延迟出窗
 
 ## 常见问题
@@ -99,4 +103,4 @@ powershell -ExecutionPolicy Bypass -File src\build\build.ps1
 编辑 `config.json` 的 `defaultUrl` 字段为对应平台地址，完全关闭浏览器后重启。
 
 **Q：卸载后想保留账号/脚本数据？**
-卸载会删除 `%LOCALAPPDATA%\BrowserForLazy\` 全部数据。如需保留，卸载前复制该目录备份。
+卸载会删除 `%LOCALAPPDATA%\Course-Thru\` 全部数据。如需保留，卸载前复制该目录备份。

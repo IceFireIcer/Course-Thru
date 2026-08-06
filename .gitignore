@@ -1,6 +1,7 @@
 # ===== 构建产物（运行 build.ps1 生成）=====
 /dist/
 /dist-installer/
+/Build-Product/
 
 # ===== 构建缓存（build.ps1 下载的组件：Chromium / Go / Inno Setup 等）=====
 /.tools/

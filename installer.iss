@@ -1,26 +1,26 @@
-; BrowserForLazy 安装脚本 (Inno Setup)
+; Course-Thru（课速通）安装脚本 (Inno Setup)
 ; 编译: ISCC.exe "/DDIST=<dist目录绝对路径>" installer.iss
-; 产出: <项目根>\dist-installer\BrowserForLazySetup.exe
+; 产出: <项目根>\dist-installer\Course-ThruSetup.exe
 
 #ifndef DIST
   #define DIST "dist"
 #endif
 
-#define MyAppName "BrowserForLazy"
+#define MyAppName "Course-Thru"
 #define MyAppVersion "1.0.0"
-#define MyAppExeName "BrowserForLazy.exe"
+#define MyAppExeName "Course-Thru.exe"
 
 [Setup]
 AppId={{F8E1B0C4-9A6D-4E2B-8C3F-5D7A1B9C2E4A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=BrowserForLazy
+AppPublisher=Course-Thru
 DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist-installer
-OutputBaseFilename=BrowserForLazySetup
+OutputBaseFilename=Course-ThruSetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -38,7 +38,7 @@ Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescripti
 Source: "{#DIST}\chrome\*"; DestDir: "{app}\chrome"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\extensions\*"; DestDir: "{app}\extensions"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\profile_seed\*"; DestDir: "{app}\profile_seed"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#DIST}\BrowserForLazy.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DIST}\Course-Thru.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DIST}\config.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop-browser.ps1"; DestDir: "{app}"; Flags: ignoreversion
 

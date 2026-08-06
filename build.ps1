@@ -1,4 +1,4 @@
-﻿# build.ps1 — BrowserForLazy 一键构建脚本（Windows）
+﻿# build.ps1 — Course-Thru（课速通）一键构建脚本（Windows）
 # 流程：下载组件(Chromium/ScriptCat/OCS) → 注入固定 key → 编译启动器 → 生成预置 profile → 组装 dist 发布目录
 # 用法: powershell -ExecutionPolicy Bypass -File build.ps1 [-SkipProfile] [-NoNsis]
 param(
@@ -19,17 +19,34 @@ $OcsTag        = "4.15.3"
 
 $ChromeUrl     = "https://registry.npmmirror.com/-/binary/chrome-for-testing/$ChromeVersion/win64/chrome-win64.zip"
 $ScriptCatUrl  = "https://github.com/scriptscat/scriptcat/releases/download/$ScriptCatTag/scriptcat-$ScriptCatTag-chrome.zip"
-$OcsUrl        = "https://github.com/ocsjs/ocsjs/releases/download/$OcsTag/ocs.user.js"
+# OCS 脚本已随仓库维护（extensions\ocs.user.js），不再从 GitHub Release 下载；
+# $OcsTag 仅作为本地文件的版本一致性校验参考。
 
 function Info($m)   { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m)   { Write-Host "[build] 警告: $m" -ForegroundColor Yellow }
 function Fail($m)   { Write-Host "[build] 错误: $m" -ForegroundColor Red; exit 1 }
 
-# 幂等下载：已有文件则跳过（开发迭代加速）
+# 读取系统代理（curl.exe 不读 WinINET 设置，需要显式传入）
+function Get-SystemProxy {
+    $s = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
+    if ($s.ProxyEnable -eq 1 -and $s.ProxyServer) { return $s.ProxyServer }
+    return $null
+}
+
+# 幂等下载：已有文件则跳过（开发迭代加速）。
+# 直连失败时自动回退到系统代理（兼容国内网络/代理环境）。
 function Download($url, $out) {
     if (Test-Path $out) { Info "已存在，跳过下载: $out"; return }
     Info "下载: $url"
     & curl.exe -L --max-time 500 -o $out $url
+    if ($LASTEXITCODE -ne 0) {
+        $proxy = Get-SystemProxy
+        if ($proxy) {
+            Warn "直连失败（exit $LASTEXITCODE），改用系统代理 $proxy 重试"
+            Remove-Item $out -Force -ErrorAction SilentlyContinue
+            & curl.exe -L --max-time 500 --proxy "http://$proxy" -o $out $url
+        }
+    }
     if ($LASTEXITCODE -ne 0) { Fail "下载失败: $url" }
 }
 
@@ -44,30 +61,41 @@ function Unzip($zip, $dest) {
 # ============ 1. 准备 / 注入固定扩展 key ============
 New-Item -ItemType Directory -Force $Tools, $KeysDir | Out-Null
 $keyFile = Join-Path $KeysDir "scriptcat.key"
+# 扩展 ID 由公钥唯一决定（=> hodgdaljmnbiliahlpcjcpiphnkbmfff）。
+# 公钥缺失时禁止自动生成新密钥对：换 key = 换 ID，会让所有已有用户
+# profile 里的脚本数据失效。必须通过 git 恢复该文件，而不是重新生成。
 if (-not (Test-Path $keyFile)) {
-    Info "生成固定扩展 key（扩展 ID 由此确定，请勿删除）..."
-    # 用 node 生成（兼容 .NET Framework 下的 PowerShell 5.1）
-    $keyJson = node -e "const {generateKeyPairSync}=require('crypto');const {publicKey,privateKey}=generateKeyPairSync('rsa',{modulusLength:4096});process.stdout.write(JSON.stringify({pub:publicKey.export({type:'spki',format:'der'}).toString('base64'),priv:privateKey.export({type:'pkcs8',format:'der'}).toString('base64')}))"
-    if ($LASTEXITCODE -ne 0 -or -not $keyJson) { Fail "node 生成 key 失败" }
-    $keys = $keyJson | ConvertFrom-Json
-    [IO.File]::WriteAllText($keyFile, $keys.pub)
-    $privPem = "-----BEGIN PRIVATE KEY-----`n" +
-               ([regex]::Replace($keys.priv, '(.{64})', "`$1`n")) + "`n-----END PRIVATE KEY-----"
-    [IO.File]::WriteAllText((Join-Path $KeysDir "scriptcat_private.pem"), $privPem)
-    Info "已生成 key: $($keys.pub.Substring(0,32))..."
-} else {
-    $existingKey = (Get-Content $keyFile -Raw).Trim()
-    Info "复用已有 key: $($existingKey.Substring(0,32))..."
+    Fail "缺少 keys\scriptcat.key！扩展 ID 由此公钥决定，删除/丢失会改变 ID 并使既有用户数据失效。请用 git restore 恢复该文件后重试。"
 }
 $ScriptCatKey = (Get-Content $keyFile -Raw).Trim()
+if (-not $ScriptCatKey) {
+    Fail "keys\scriptcat.key 内容为空，请通过 git 恢复该文件。"
+}
+Info "复用固定 key（扩展 ID 恒定）: $($ScriptCatKey.Substring(0,32))..."
+
+# 私钥不参与构建（unpacked 扩展加载无需签名校验），仅在将来需要
+# CRX 签名 / 商店上架时才有用。它已被 .gitignore 排除，请自行在安全位置
+# 备份；缺失不阻塞构建，仅提示。
+$privKeyFile = Join-Path $KeysDir "scriptcat_private.pem"
+if (-not (Test-Path $privKeyFile)) {
+    Warn "keys\scriptcat_private.pem 不存在（构建不依赖它）。如将来需要 CRX 签名/商店上架，请确保该私钥有安全备份。"
+}
 
 # ============ 2. 下载组件 ============
 $chromeZip   = Join-Path $Tools "chrome-win64.zip"
 $scriptcatZip = Join-Path $Tools "scriptcat.zip"
-$ocsFile     = Join-Path $Tools "ocs.user.js"
+$ocsFile     = Join-Path $Root "extensions\ocs.user.js"
 Download $ChromeUrl $chromeZip
 Download $ScriptCatUrl $scriptcatZip
-Download $OcsUrl $ocsFile
+
+# OCS 脚本本地化：必须随仓库存在，缺失即报错（避免静默使用旧缓存）
+if (-not (Test-Path $ocsFile)) {
+    Fail "缺少本地 OCS 脚本 $ocsFile。请从 https://github.com/ocsjs/ocsjs/releases/download/$OcsTag/ocs.user.js 下载后放入 extensions\ 目录。"
+}
+$ocsVersion = Select-String -Path $ocsFile -Pattern '@version\s+([0-9.]+)' | Select-Object -First 1
+if ($ocsVersion -and $ocsVersion.Matches[0].Groups[1].Value -ne $OcsTag) {
+    Warn "本地 OCS 脚本版本 $($ocsVersion.Matches[0].Groups[1].Value) 与期望 $OcsTag 不一致，请确认是否需要升级并更新 $OcsTag"
+}
 
 # ============ 3. 准备 Chromium ============
 $distChrome = Join-Path $Dist "chrome"
@@ -94,12 +122,41 @@ if (-not (Test-Path (Join-Path $extDir "manifest.json"))) {
 }
 # 注入 key（每次构建都确保存在）
 $mfPath = Join-Path $extDir "manifest.json"
-$mf = Get-Content $mfPath -Raw | ConvertFrom-Json
+$mf = [System.IO.File]::ReadAllText($mfPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
 if (-not $mf.key -or $mf.key -ne $ScriptCatKey) {
     Info "注入固定 key 到 ScriptCat manifest..."
     $mf | Add-Member -NotePropertyName "key" -NotePropertyValue $ScriptCatKey -Force
     $json = $mf | ConvertTo-Json -Depth 20 -Compress
-    [IO.File]::WriteAllText($mfPath, $json)
+    [System.IO.File]::WriteAllText($mfPath, $json, [System.Text.UTF8Encoding]::new($false))
+}
+
+# ============ 4.5 打包本地 OCS 脚本到产物 ============
+# OCS 已随仓库维护，直接复制进便携版/安装版（用户可在脚本猫中手动重新导入；
+# 预置 profile 中的安装由 gen-profile.mjs 完成）。
+$ocsDist = Join-Path (Split-Path $extDir -Parent) "ocs.user.js"
+Copy-Item -LiteralPath $ocsFile -Destination $ocsDist -Force
+
+# 屏蔽 ScriptCat 安装成功欢迎页：unpacked 扩展每次启动都会触发
+# onInstalled(reason=install)，不屏蔽则每次打开浏览器都会弹出安装完成页。
+# 只把条件改为恒 false 以保留代码结构；若未来版本改动该段代码则警告。
+$swPath = Join-Path $extDir "src\service_worker.js"
+$swFrom = 'if("install"===e.reason)chrome.tabs.create({url:`${q}${af}/docs/use/install_comple`})'
+$swTo   = 'if("install"===e.reason&&false)chrome.tabs.create({url:`${q}${af}/docs/use/install_comple`})'
+if (-not (Test-Path $swPath)) {
+    Warn "未找到 ScriptCat service_worker.js，跳过欢迎页屏蔽"
+} else {
+    # 必须用 UTF-8 显式读写：PS 5.1 的 Get-Content 默认按 ANSI/GBK 解码，
+    # 会把 UTF-8 中文读成乱码再写回，导致扩展脚本语法损坏、无法加载。
+    $swText = [System.IO.File]::ReadAllText($swPath, [System.Text.Encoding]::UTF8)
+    if ($swText.Contains($swFrom)) {
+        $swText = $swText.Replace($swFrom, $swTo)
+        [System.IO.File]::WriteAllText($swPath, $swText, [System.Text.UTF8Encoding]::new($false))
+        Info "已屏蔽 ScriptCat 安装成功欢迎页（每次启动不再弹出）"
+    } elseif ($swText.Contains($swTo)) {
+        Info "ScriptCat 欢迎页补丁已存在（复用已有扩展目录，无需重复打补丁）"
+    } else {
+        Warn "service_worker.js 中未找到欢迎页代码，升级后可能重新弹出；请检查 ScriptCat 版本"
+    }
 }
 
 # ============ 5. 编译 Go 启动器 ============
@@ -111,12 +168,19 @@ if (-not (Test-Path $goExe)) {
         # 备选源：golang.google.cn / mirrors.aliyun.com
         Download "https://mirrors.aliyun.com/golang/go1.26.5.windows-amd64.zip" $goZip
     }
-    Unzip $goZip $Tools
-    # go.zip 解压出 go/ 目录
-    if (-not (Test-Path $goExe)) { Fail "Go SDK 解压失败" }
+    # 解压到独立临时目录再移动（不能直接解压到 $Tools：它已存在，
+    # 而 Unzip 对已存在的目标会跳过，导致全新环境永远解压不出来）
+    $goUnpack = Join-Path $Tools "go-unpack"
+    Unzip $goZip $goUnpack
+    $goDir = Get-ChildItem $goUnpack -Directory | Select-Object -First 1
+    if (-not $goDir -or -not (Test-Path (Join-Path $goDir.FullName "bin\go.exe"))) {
+        Fail "Go SDK 解压失败"
+    }
+    Move-Item $goDir.FullName (Join-Path $Tools "go")
+    Remove-Item $goUnpack -Recurse -Force -ErrorAction SilentlyContinue
 }
 Info "编译启动器..."
-& $goExe -C $Root build -ldflags "-H=windowsgui" -o (Join-Path $Dist "BrowserForLazy.exe")
+& $goExe -C $Root build -ldflags "-H=windowsgui" -o (Join-Path $Dist "Course-Thru.exe")
 if ($LASTEXITCODE -ne 0) { Fail "Go 编译失败" }
 
 # ============ 6. 生成预置 profile（开箱即用核心步骤）============
@@ -138,6 +202,11 @@ if (-not $SkipProfile -and -not (Test-Path (Join-Path $profileSeed "Default"))) 
     New-Item -ItemType Directory -Force $profileSeed | Out-Null
     Copy-Item (Join-Path $tempProfile "Local State") $profileSeed -Force
     Copy-Item (Join-Path $tempProfile "Default") (Join-Path $profileSeed "Default") -Recurse -Force
+    # 清理会话恢复数据：生成流程打开的标签/窗口不应随种子分发
+    foreach ($sd in @("Sessions", "Sessions_Encrypted")) {
+        $sp = Join-Path $profileSeed "Default\$sd"
+        if (Test-Path $sp) { Remove-Item $sp -Recurse -Force -ErrorAction SilentlyContinue }
+    }
     Remove-Item $tempProfile -Recurse -Force -ErrorAction SilentlyContinue
 } else {
     Info "跳过 profile 生成（或已有 profile_seed）"
@@ -148,10 +217,19 @@ if (-not (Test-Path (Join-Path $profileSeed "Default"))) { Warn "profile_seed �
 $config = @{
     defaultUrl = ""
     extraArgs  = @()
-    appName    = "BrowserForLazy"
+    appName    = "Course-Thru"
     extensions = @("extensions/scriptcat")
 } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Dist "config.json"), $config)
+
+# ============ 7.5 清理产物内残留（不应进入安装包） ============
+# 开发期 gen-profile 曾把临时 profile 写到 dist\chrome\.tools\profile-tmp，
+# 这类残留会随安装包一起分发。Chromium 目录内不应存在 .tools，发现即清理。
+$chromeTools = Join-Path $Dist "chrome\.tools"
+if (Test-Path $chromeTools) {
+    Warn "发现 dist\chrome\.tools 残留（开发期临时数据），已清理，避免混入安装包"
+    Remove-Item $chromeTools -Recurse -Force
+}
 
 # ============ 8. 组装 Inno Setup 安装包 ============
 # 注：最初计划用 NSIS，但其官方二进制只托管在 SourceForge（国内不可达），
@@ -170,7 +248,7 @@ if (-not $NoNsis) {
     $zhLang = Join-Path $Tools "inno\Languages\ChineseSimplified.isl"
     if (-not (Test-Path $zhLang)) {
         Info "下载中文语言包..."
-        & curl.exe -sL --max-time 30 -o $zhLang "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl"
+        Download "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl" $zhLang
     }
     if (Test-Path $iscc) {
         Info "编译 Inno Setup 安装程序..."
@@ -182,4 +260,4 @@ if (-not $NoNsis) {
 }
 
 Info "构建完成！发布目录: $Dist"
-Info "启动方式: 双击 $Dist\BrowserForLazy.exe"
+Info "启动方式: 双击 $Dist\Course-Thru.exe"

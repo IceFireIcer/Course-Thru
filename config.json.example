@@ -1,6 +1,6 @@
 {
   "defaultUrl": "",
   "extraArgs": [],
-  "appName": "BrowserForLazy",
+  "appName": "Course-Thru",
   "extensions": ["extensions/scriptcat"]
 }
