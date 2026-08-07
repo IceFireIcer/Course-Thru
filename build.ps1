@@ -172,6 +172,43 @@ Info "替换品牌字符串（Chrome for Testing -> Course-Thru）..."
 & python $brandScript $pakFiles
 if ($LASTEXITCODE -ne 0) { Fail "品牌字符串替换失败" }
 
+# ============ 3.6 品牌 logo 图片资源替换（构建期）============
+# 用 logo\logo.png 生成全套图标资产到 assets\（app.ico / 安装向导图 /
+# pak 内嵌 PNG / ScriptCat 扩展图标），再把 Chromium 三个 pak 里的
+# Chrome 产品 logo 图片按“四色品牌色占比”启发式替换为自有 logo。
+# 方案与验证见 LOGO-REPLACEMENT.md；脚本均幂等，可重复执行。
+$assetsDir     = Join-Path $Root "assets"
+$logoGenScript = Join-Path $Root "generate-assets.py"
+$logoPatchScript = Join-Path $Root "patch-logo.py"
+$iconPatchScript = Join-Path $Root "patch-icons.py"
+$logoPng        = Join-Path $Root "logo\logo.png"
+foreach ($s in @($logoGenScript, $logoPatchScript, $iconPatchScript)) {
+    if (-not (Test-Path $s)) { Fail "缺少 logo 构建脚本 $s" }
+}
+if (-not (Test-Path $logoPng)) { Fail "缺少 logo 源文件 $logoPng（请放入 logo\logo.png）" }
+Info "生成 logo 资产（assets\app.ico / 向导图 / pak 内嵌 PNG / ScriptCat 图标）..."
+& python $logoGenScript
+if ($LASTEXITCODE -ne 0) { Fail "logo 资产生成失败（需要 Pillow：python -m pip install Pillow）" }
+Info "替换 Chromium 产品 logo 图片资源（三个 pak）..."
+& python $logoPatchScript `
+    $assetsDir `
+    (Join-Path $distChrome "resources.pak") `
+    (Join-Path $distChrome "chrome_100_percent.pak") `
+    (Join-Path $distChrome "chrome_200_percent.pak")
+if ($LASTEXITCODE -ne 0) { Fail "pak 产品 logo 替换失败" }
+
+# ============ 3.7 浏览器 PE 图标替换（构建期）============
+# chrome.exe 主图标组是命名资源 IDR_MAINFRAME、chrome.dll 是数值组 101，
+# rcedit 只会新增未命名组而无法替换它们，故用 patch-icons.py 直接重建
+# 资源段（幂等）。chrome_pwa_launcher.exe 的组为数值 1，一并替换。
+Info "替换浏览器 PE 图标（chrome.exe / chrome.dll / chrome_pwa_launcher.exe）..."
+& python $iconPatchScript (Join-Path $distChrome "chrome.exe") --logo $logoPng --groups IDR_MAINFRAME,IDR_X001_APP_LIST
+if ($LASTEXITCODE -ne 0) { Fail "chrome.exe 图标替换失败" }
+& python $iconPatchScript (Join-Path $distChrome "chrome.dll") --logo $logoPng --groups 101
+if ($LASTEXITCODE -ne 0) { Fail "chrome.dll 图标替换失败" }
+& python $iconPatchScript (Join-Path $distChrome "chrome_pwa_launcher.exe") --logo $logoPng --groups 1
+if ($LASTEXITCODE -ne 0) { Fail "chrome_pwa_launcher.exe 图标替换失败" }
+
 # ============ 4. 准备 ScriptCat 扩展（注入 key）============
 $extDir = Join-Path $Dist "extensions\scriptcat"
 if (-not (Test-Path (Join-Path $extDir "manifest.json"))) {
@@ -200,6 +237,18 @@ if (-not $mf.key -or $mf.key -ne $ScriptCatKey) {
     $mf | Add-Member -NotePropertyName "key" -NotePropertyValue $ScriptCatKey -Force
     $json = $mf | ConvertTo-Json -Depth 20 -Compress
     [System.IO.File]::WriteAllText($mfPath, $json, [System.Text.UTF8Encoding]::new($false))
+}
+
+# ============ 4.3 替换 ScriptCat 扩展图标 ============
+# manifest 的 action.default_icon / icons 与弹窗/选项页头部 <img> 都引用
+# assets\logo*.png，覆盖同名文件即全链路生效；profile_seed 无扩展文件副本，
+# 不需要重新生成 profile。
+$scLogoDir = Join-Path $extDir "assets"
+if (Test-Path $scLogoDir) {
+    Info "替换 ScriptCat 扩展图标（assets\scriptcat\* -> $scLogoDir）..."
+    Copy-Item -Path (Join-Path $assetsDir "scriptcat\*") -Destination $scLogoDir -Force
+} else {
+    Warn "未找到 ScriptCat assets 目录 $scLogoDir，跳过扩展图标替换"
 }
 
 # ============ 4.5 打包本地 OCS 脚本到产物 ============
@@ -263,6 +312,10 @@ if (-not (Test-Path $goExe)) {
 Info "编译启动器..."
 & $goExe -C $Root build -ldflags "-H=windowsgui" -o (Join-Path $Dist "Course-Thru.exe")
 if ($LASTEXITCODE -ne 0) { Fail "Go 编译失败" }
+
+# 启动器图标：Go 编译产物默认无图标资源，构建后把 logo 图标注入新资源段
+& python $iconPatchScript (Join-Path $Dist "Course-Thru.exe") --logo $logoPng --add-main-icon
+if ($LASTEXITCODE -ne 0) { Fail "启动器图标注入失败" }
 
 # ============ 6. 生成预置 profile（开箱即用核心步骤）============
 $profileSeed = Join-Path $Dist "profile_seed"

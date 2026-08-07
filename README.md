@@ -55,6 +55,12 @@
 main.go / go.mod                # Go 启动器源码（GUI 子系统）
 build.ps1                       # 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译 → 打包
 patch-branding.py               # 构建期替换语言包里的 "Chrome for Testing" 品牌字样（幂等）
+generate-assets.py              # 从 logo/logo.png 生成 assets\ 全套 logo 资源（幂等）
+patch-logo.py                   # 构建期替换 Chromium pak 里的产品 logo 图片（内容识别，幂等）
+patch-icons.py                  # 构建期替换 chrome.exe / chrome.dll / 启动器 PE 图标（幂等）
+assets/                         # 生成的 logo 资源（app.ico / 向导图 / pak 内嵌 PNG / ScriptCat 图标）
+logo/logo.png                   # 唯一 logo 源文件
+LOGO-REPLACEMENT.md             # logo 全链路替换方案、验证清单与踩坑记录
 VERSION.md / version.txt        # 版本管理方案 / 版本号单一来源（完整构建自动递增）
 gen-profile.mjs                 # CDP 生成预置 profile（直接写入 ScriptCat 存储预置 OCS，默认启用）
 installer.iss                   # Inno Setup 安装脚本
@@ -107,6 +113,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **默认搜索用扩展而非策略**：`DefaultSearchProvider*` 是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略；`chrome_settings_overrides.search_provider` 扩展机制在 unpacked 扩展上直接生效
 - **多扩展必须逗号合并**：`--load-extension` 是单值开关，重复传多个只认最后一个，因此 ScriptCat 与百度扩展必须合并为一个参数值
 - **品牌字样靠构建期替换语言包**：CDP 与企业策略都无法修改窗口标题模板、新标签页「自定义」按钮、设置「关于」页里的 "Chrome for Testing" 字样——这些字符串编译在 `locales\*.pak` 资源里。`patch-branding.py` 在 Chromium 解压后统一替换为 "Course-Thru 课速通"，幂等可重复执行；升级 Chromium 版本后由构建自动重新打补丁
+- **品牌 logo 靠构建期替换资源**：Chrome 图标/产品 logo 编译在 `chrome_*.pak`、`resources.pak` 与 chrome.exe / chrome.dll 的 PE 资源里，同样无法用命令行或策略修改。构建期用 `patch-logo.py`（内容识别替换 pak 内 PNG）与 `patch-icons.py`（重建资源段替换 PE 图标）统一换成 `logo/logo.png` 派生的全套资源；ScriptCat 工具栏图标与 Inno Setup 安装包图标/向导图也一并替换。完整方案与验证清单见 `LOGO-REPLACEMENT.md`
 - **只保留中英繁三语语言包**：构建时裁剪 Chromium `locales\*.pak`（保留 en-US / zh-CN / zh-TW，含性别变体）与 ScriptCat `_locales`（保留 en / zh_CN / zh_TW）。首选语言包缺失时 Chrome 自动回退 en-US、扩展回退 `default_locale`（en），程序不会报错；保留清单在 `build.ps1` 顶部的 `$KeepChromeLocales` / `$KeepExtLocales`
 
 ## 常见问题

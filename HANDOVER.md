@@ -248,7 +248,7 @@ Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Pro
 | 默认网课平台 | 📋 待办 | `config.json` 的 `defaultUrl` 留空 |
 | 推送 GitHub | ✅ 已完成 | `origin = https://github.com/IceFireIcer/Course-Thru.git`（新仓库），main 分支已推送（10 个提交，含阶段四/五全部改动），本地与远程一致 |
 | 私钥安全备份 | 📋 建议 | 把 `keys\scriptcat_private.pem` 备份到仓库外安全位置 |
-| 应用图标 | 💡 可选 | 启动器与安装包用默认图标 |
+| 应用图标 | ✅ 已完成 | 2026-08-07：按 `LOGO-REPLACEMENT.md` 全链路替换——pak 产品 logo（四色 + CfT 浅蓝 C 双启发式，内容识别，幂等）、chrome.exe / chrome.dll / chrome_pwa_launcher.exe / 启动器 PE 图标、ScriptCat 扩展图标、安装包图标与向导图；产物版本 1.0.7 已按 5.1/5.2/5.3 清单验证（pak 无残留、图标像素一致、headless 冒烟通过）。已知限制：NTP 顶部 Google 字标由二进制内资源动态提供，无法替换（见 LOGO-REPLACEMENT.md 6.9） |
 | 物理文件夹改名 | 💡 可选 | 磁盘目录仍为 `browserForLazy`（工作区根路径未动），需要时可手动改名为 `Course-Thru` |
 
 ---

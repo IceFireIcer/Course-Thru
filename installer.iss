@@ -27,6 +27,10 @@ OutputBaseFilename=Course-Thru-{#MyAppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; 品牌：安装包图标与向导图（assets\ 目录由 generate-assets.py 从 logo\logo.png 生成）
+SetupIconFile=assets\app.ico
+WizardImageFile=assets\wizard-image.bmp
+WizardSmallImageFile=assets\wizard-small-image.bmp
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Uninstallable=yes
 
