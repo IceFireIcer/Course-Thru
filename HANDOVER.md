@@ -1,6 +1,6 @@
 # Course-Thru（课速通）交接文档（更新版）
 
-> 更新时间：2026-08-07（第四阶段交接：谷歌功能清理与默认搜索引擎固化；阶段四改动已提交并推送）
+> 更新时间：2026-08-07（第五阶段后修订：git 状态与远程地址已同步至新仓库 Course-Thru；README 中扩展 ID 已移除）
 > 项目：Course-Thru（课速通）— 基于 Chromium + ScriptCat + OCS 的刷网课浏览器（Windows）
 > 阅读顺序：先读 README.md 了解使用方式，再读本文了解来龙去脉与当前状态。
 
@@ -95,18 +95,18 @@
 
 ### 扩展 ID 与密钥
 
-- 扩展 ID：`hodgdaljmnbiliahlpcjcpiphnkbmfff`（由公钥计算，恒定）
+- 扩展 ID：由 `keys\scriptcat.key` 公钥计算，恒定（具体值不在文档中列出，构建产物 manifest 中可查）
 - `keys\scriptcat.key`：公钥，**已入库，必备**，删除会改变 ID 并使既有用户数据失效
 - `keys\scriptcat_private.pem`：私钥，gitignore，**仅本地备份**；unpacked 加载不需要它，只在将来 CRX 签名/商店上架时需要
 
 ### git 状态
 
-- main 分支，6 个提交（`f0423da` 初始搭建、`42a45c4` 交接文档、`df785ab` 改名与重构、`52efc8b` 交接文档更新、`61fc0c5` 抑制 CfT 横幅、`bf66eb6` 关闭谷歌功能并以百度为默认搜索引擎），**已推送 GitHub**
-- 远程：`origin = https://github.com/IceFireIcer/Course-Thru-NBCC.git`，`main` 已跟踪 `origin/main`，本地 `HEAD` 与远程一致，工作区干净
+- main 分支，10 个提交（`f0423da` 初始搭建、`42a45c4` 交接文档、`df785ab` 改名与重构、`52efc8b` 交接文档更新、`61fc0c5` 抑制 CfT 横幅、`bf66eb6` 关闭谷歌功能并以百度为默认搜索引擎、`600857d` 交接文档同步、`b156b73` 版本号自动递增、`c04a531` 严重错误日志打包、`1236ed1` README 同步），**已推送 GitHub**
+- 远程：`origin = https://github.com/IceFireIcer/Course-Thru.git`（新公开仓库；原私有仓库 `Course-Thru-NBCC` 已弃用），`main` 已跟踪 `origin/main`，本地 `HEAD` 与远程一致，工作区干净
 - 提交身份：`IceFireIcer <icefire_icer@outlook.com>`
 - `.tools/`、`.agents/`、`.claude/`、`skills-lock.json`、`dist/`、`dist-installer/`、`Build-Product/`、私钥均被 gitignore
 
-> **2026-08-07 更新：阶段四改动已提交并推送**（`bf66eb6`，含 `extensions/ocs.user.js` 的外部修改），本地与远程同步，无未提交改动。
+> **2026-08-07 修订说明**：本交接文档系从私有项目整库复制而来，git 状态与远程地址已按新仓库实际修订；推送时以本地历史覆盖了建仓自动生成的初始提交（其中的 Apache-2.0 LICENSE 已保留入库，README 以本项目为准）。
 
 ### 清理动作的实际状态（重要，未决事项）
 
@@ -129,7 +129,6 @@
 
 | 文件 | 职责 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动前写入 9 条 CfT 专用注册表策略并在浏览器退出后自动恢复（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载）；③ 默认扩展列表加入 `extensions/baidu-search`；④ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）。 |
 | `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动前写入 9 条 CfT 专用注册表策略并在浏览器退出后自动恢复（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载）；③ 默认扩展列表加入 `extensions/baidu-search`；④ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）；⑤ 新增 `coursethru.log` 滚动日志（2 MB 轮转）与严重错误日志自动打包（`crash-logs\` zip + 自动打开文件夹，见阶段五第 2 条）。 |
 | `go.mod` | Go 模块定义（`coursethru/launcher`，go 1.26）。 |
 | `build.ps1` | 一键构建：下载固定版本组件（直连失败自动回退系统代理）→ 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 复制百度搜索扩展 → 编译启动器 → 生成/复用预置 profile → 写 `config.json`（默认扩展列表含 scriptcat + baidu-search）→ 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。**注意：文件必须保持 UTF-8 BOM（PowerShell 5.1 中文脚本依赖）**。 |
@@ -221,7 +220,7 @@ Copy-Item -Path 'dist\*' -Destination 'Build-Product\portable' -Recurse -Force
 Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Product' -Force
 ```
 
-验证要点：首次启动生成 `profile/` 与 `first_run.flag`，且**只打开 1 个 `about:blank`**（无多余会话窗口）；任何启动都不出现 `docs.scriptcat.org` 相关页面（install_comple / changelog / open-dev）；扩展 ID 保持 `hodgdaljmnbiliahlpcjcpiphnkbmfff`。
+验证要点：首次启动生成 `profile/` 与 `first_run.flag`，且**只打开 1 个 `about:blank`**（无多余会话窗口）；任何启动都不出现 `docs.scriptcat.org` 相关页面（install_comple / changelog / open-dev）；扩展 ID 恒定（由 `keys\scriptcat.key` 公钥计算，不随目录变化）。
 
 ---
 
@@ -238,7 +237,7 @@ Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Pro
 | `gen-profile.mjs` 时序/流程 | ✅ 已修复 | 已改为信号驱动 + 直接存储注入（无服务器、无 UI 点击安装）；`profile_seed` 已用新流程重新生成并端到端验证（OCS 预置启用、开发者模式开启、无欢迎页、无扩展错误、跨路径可移植） |
 | 组件版本升级 | 📋 待办 | 改 `build.ps1` 顶部版本号 + 重新生成 `profile_seed` |
 | 默认网课平台 | 📋 待办 | `config.json` 的 `defaultUrl` 留空 |
-| 推送 GitHub | ✅ 已完成 | `origin = https://github.com/IceFireIcer/Course-Thru-NBCC.git`，main 分支已推送（6 个提交，含阶段四全部改动） |
+| 推送 GitHub | ✅ 已完成 | `origin = https://github.com/IceFireIcer/Course-Thru.git`（新仓库），main 分支已推送（10 个提交，含阶段四/五全部改动），本地与远程一致 |
 | 私钥安全备份 | 📋 建议 | 把 `keys\scriptcat_private.pem` 备份到仓库外安全位置 |
 | 应用图标 | 💡 可选 | 启动器与安装包用默认图标 |
 | 物理文件夹改名 | 💡 可选 | 磁盘目录仍为 `browserForLazy`（工作区根路径未动），需要时可手动改名为 `Course-Thru` |
