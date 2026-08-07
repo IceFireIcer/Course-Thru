@@ -11,6 +11,8 @@
 - ⚡ **开箱即用**：预置 profile 已开启「开发者模式」与「允许运行用户脚本」，OCS 已就绪；首次启动不弹任何引导页/信任提示
 - 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
+- 🛡️ **默认关闭谷歌功能**：同步、后台联网、组件更新、崩溃上报、翻译与 AI 功能均通过启动参数禁用；另有 9 条 CfT 专用注册表策略关闭登录/后台运行/安全浏览上报等，**只影响本程序，不影响用户日常 Chrome**
+- 🔍 **默认搜索引擎为百度**：通过内置扩展设置，设置页标注「由扩展控制」
 - 🧯 **错误日志自动打包**：程序遇到严重错误无法启动时，自动把日志打包为 zip 存到 `crash-logs\` 并打开文件夹，方便微信回传排查
 
 ## 使用
@@ -34,7 +36,7 @@
   "defaultUrl": "",
   "extraArgs": [],
   "appName": "Course-Thru",
-  "extensions": ["extensions/scriptcat"]
+  "extensions": ["extensions/scriptcat", "extensions/baidu-search"]
 }
 ```
 
@@ -52,23 +54,27 @@
 ```
 main.go / go.mod                # Go 启动器源码（GUI 子系统）
 build.ps1                       # 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译 → 打包
+VERSION.md / version.txt        # 版本管理方案 / 版本号单一来源（完整构建自动递增）
 gen-profile.mjs                 # CDP 生成预置 profile（直接写入 ScriptCat 存储预置 OCS，默认启用）
 installer.iss                   # Inno Setup 安装脚本
 stop-browser.ps1                # 卸载时关闭本程序浏览器进程
 keys/scriptcat.key              # 扩展固定 key（勿删，删除会改变扩展 ID）
 extensions/ocs.user.js          # OCS 网课助手脚本（本地维护，构建时打包进产物）
+extensions/baidu-search/        # 百度默认搜索引擎扩展（chrome_settings_overrides）
 config.json.example             # 配置示例（默认页接口）
 
 dist/                           # 便携发布目录（构建产物）
 ├── Course-Thru.exe             # 启动器
 ├── config.json                 # 配置（默认页接口）
+├── version.txt                 # 当前版本号
+├── coursthru.log               # 启动器滚动日志（2 MB 轮转）
 ├── crash-logs/                 # 严重错误时自动生成的日志 zip（首次出错时创建）
 ├── chrome/                     # Chromium for Testing
-├── extensions/                 # ScriptCat 扩展 + ocs.user.js
+├── extensions/                 # ScriptCat + baidu-search + ocs.user.js
 ├── profile_seed/               # 预置 profile（开发者模式 + userScripts 开关 + OCS 已预置启用）
 └── profile/                    # 运行时 profile（首次启动由启动器从 profile_seed 复制）
 .tools/                         # 构建缓存（下载的组件）
-dist-installer/                 # 安装包输出目录
+dist-installer/                 # 安装包输出目录（Course-Thru-<版本>-Setup.exe）
 Build-Product/                  # 交付汇总（portable/ 便携版 + Course-Thru-<版本>-Setup.exe 安装版）
 ```
 
@@ -86,6 +92,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - `-SkipProfile` 跳过预置 profile 生成（复用已有 `dist\profile_seed`）
 - `-NoNsis` 跳过安装包（只产出便携 `dist`）
 - `-Version x.y.z` 手动指定构建版本（默认完整构建 patch 自动 +1，版本方案见 `VERSION.md`）
+- 若本地 OCS 脚本的 `@version` 与 `build.ps1` 顶部 `$OcsTag` 不一致，构建会警告但不阻塞（升级 OCS 后请同步更新 `$OcsTag`）
 
 ## 技术说明
 
@@ -96,6 +103,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **开发者模式默认开启**：生成 profile 时通过 CDP 点击 chrome://extensions 的真实开关并持久化，首次启动不弹「开启开发者模式」信任提示
 - **首次启动只开一个空白页**：生成流程的窗口会话数据已从种子中清理（三重保险：gen-profile、build.ps1、启动器），不会恢复出多余标签页
 - **不能加 `--disable-extensions-except`**：该参数会触发 Chromium「先禁用全部扩展再重启进程」流程，首次启动会弹「加载扩展程序时候出错」并延迟出窗
+- **默认搜索用扩展而非策略**：`DefaultSearchProvider*` 是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略；`chrome_settings_overrides.search_provider` 扩展机制在 unpacked 扩展上直接生效
+- **多扩展必须逗号合并**：`--load-extension` 是单值开关，重复传多个只认最后一个，因此 ScriptCat 与百度扩展必须合并为一个参数值
 
 ## 常见问题
 
@@ -107,6 +116,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 **Q：浏览器打不开 / 启动报错怎么办？**
 启动器遇到严重错误时会自动把日志打包成 zip（`crash-logs\` 文件夹）并打开所在位置，把 zip 文件通过微信发给开发者即可定位问题。
+
+**Q：默认搜索引擎是百度，能改回吗？**
+默认搜索由内置百度扩展控制，设置页会标注「由扩展控制」，无法在设置里改回。
 
 **Q：卸载后想保留账号/脚本数据？**
 卸载会删除 `%LOCALAPPDATA%\Course-Thru\` 全部数据。如需保留，卸载前复制该目录备份。

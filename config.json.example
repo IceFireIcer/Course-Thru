@@ -2,5 +2,5 @@
   "defaultUrl": "",
   "extraArgs": [],
   "appName": "Course-Thru",
-  "extensions": ["extensions/scriptcat"]
+  "extensions": ["extensions/scriptcat", "extensions/baidu-search"]
 }
