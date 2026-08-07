@@ -4,6 +4,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -26,6 +28,34 @@ type Config struct {
 	Extensions []string `json:"extensions"`
 }
 
+// logFile 是启动器滚动日志的文件句柄；打开失败时所有日志静默丢弃，不阻塞主流程。
+var logFile *os.File
+
+// openLog 打开（或创建）启动器日志。日志超过 maxLogBytes 时轮转为
+// coursthru.old.log 后重新开始，避免无限增长。
+func openLog(exeDir string) {
+	const maxLogBytes = 2 << 20 // 2 MB
+	path := filepath.Join(exeDir, "coursethru.log")
+	if fi, err := os.Stat(path); err == nil && fi.Size() > maxLogBytes {
+		_ = os.Remove(filepath.Join(exeDir, "coursethru.old.log"))
+		_ = os.Rename(path, filepath.Join(exeDir, "coursethru.old.log"))
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	logFile = f
+}
+
+// logf 写一条带时间戳的日志。
+func logf(format string, args ...interface{}) {
+	if logFile == nil {
+		return
+	}
+	line := time.Now().Format("2006-01-02 15:04:05") + " [launcher] " + fmt.Sprintf(format, args...) + "\n"
+	_, _ = io.WriteString(logFile, line)
+}
+
 func main() {
 	exeDir, err := os.Executable()
 	if err != nil {
@@ -34,7 +64,11 @@ func main() {
 	}
 	exeDir = filepath.Dir(exeDir)
 
+	openLog(exeDir)
+	logf("启动 Course-Thru，程序目录: %s", exeDir)
+
 	cfg := loadConfig(exeDir)
+	logf("配置: defaultUrl=%q, extensions=%v", cfg.DefaultURL, cfg.Extensions)
 
 	chromePath := filepath.Join(exeDir, "chrome", "chrome.exe")
 	profileDir := filepath.Join(exeDir, "profile")
@@ -48,6 +82,7 @@ func main() {
 				fatal("初始化用户数据失败: " + err.Error())
 				return
 			}
+			logf("已从 profile_seed 复制初始用户数据")
 			// 种子不应携带生成流程的会话恢复数据；
 			// 删除后首次启动只打开默认页，不会恢复出生成时的窗口。
 			for _, d := range []string{"Sessions", "Sessions_Encrypted"} {
@@ -121,6 +156,9 @@ func main() {
 	restorePolicies := applyCftPolicies()
 	if restorePolicies != nil {
 		defer restorePolicies()
+		logf("已写入 CfT 企业策略（浏览器退出时自动恢复）")
+	} else {
+		logf("写入 CfT 企业策略失败（不影响主流程）")
 	}
 	cmd := exec.Command(chromePath, args...)
 	cmd.Stdout = os.Stdout
@@ -129,13 +167,18 @@ func main() {
 		fatal("启动浏览器失败: " + err.Error())
 		return
 	}
+	logf("已启动 Chromium（PID %d，首次运行: %v）", cmd.Process.Pid, firstRun)
 	if firstRun {
 		// 首次启动：自动关闭 ScriptCat 的安装成功欢迎页，并写入首次运行标记。
 		closeScriptCatWelcome(profileDir)
 		_ = os.WriteFile(markerFile, []byte("Course-Thru first run completed: "+time.Now().Format("2006-01-02 15:04:05")+"\n"), 0644)
+		logf("首次运行完成，已写入 first_run.flag")
 	}
 	// 保持启动器存活直到浏览器退出（GUI 子系统下不产生可见控制台）。
 	_ = cmd.Wait()
+	if cmd.ProcessState != nil {
+		logf("浏览器进程退出，退出码: %d", cmd.ProcessState.ExitCode())
+	}
 }
 
 // loadConfig 读取 exe 同目录下的 config.json，缺省使用内置默认值。
@@ -389,8 +432,63 @@ func closeDevToolsTab(client *http.Client, port int, id string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// fatal 显示错误消息框（GUI 子系统下没有控制台可见）。
+// bundleLogs 把启动器日志与版本信息打包成 zip，存到程序目录的 crash-logs 子文件夹。
+// 返回 zip 绝对路径；任何一步失败都返回空字符串（不阻塞主流程）。
+func bundleLogs(exeDir, reason string) string {
+	logDir := filepath.Join(exeDir, "crash-logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return ""
+	}
+	zipPath := filepath.Join(logDir, "Course-Thru-crash-"+time.Now().Format("20060102-150405")+".zip")
+	zf, err := os.Create(zipPath)
+	if err != nil {
+		return ""
+	}
+	defer zf.Close()
+	zw := zip.NewWriter(zf)
+	// 收集：启动器日志（含轮转旧日志）+ 版本信息；缺文件自动跳过。
+	files := map[string]string{
+		"coursethru.log":     filepath.Join(exeDir, "coursethru.log"),
+		"coursethru.old.log": filepath.Join(exeDir, "coursethru.old.log"),
+		"version.txt":        filepath.Join(exeDir, "version.txt"),
+	}
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		data, err := os.ReadFile(files[name])
+		if err != nil {
+			continue
+		}
+		w, err := zw.Create(name)
+		if err != nil {
+			continue
+		}
+		_, _ = w.Write(data)
+	}
+	if err := zw.Close(); err != nil {
+		return ""
+	}
+	_ = zf.Close()
+	return zipPath
+}
+
+// fatal 记录错误、把日志打包成 zip 并打开所在文件夹，然后显示错误消息框。
+// GUI 子系统下没有控制台可见，错误与日志位置都通过消息框告知用户。
 func fatal(msg string) {
+	exeDir, err := os.Executable()
+	if err == nil {
+		exeDir = filepath.Dir(exeDir)
+		logf("严重错误: %s", msg)
+		if zipPath := bundleLogs(exeDir, msg); zipPath != "" {
+			logf("已打包日志: %s", zipPath)
+			// 打开文件夹并定位 zip 文件（explorer 立即返回，不等待）
+			_ = exec.Command("explorer.exe", "/select,"+zipPath).Start()
+			msg = msg + "\n\n错误详情已打包，请在打开的文件夹中把以下 zip 发送给开发者：\n" + zipPath
+		}
+	}
 	user32 := syscall.NewLazyDLL("user32.dll")
 	mb := user32.NewProc("MessageBoxW")
 	title, _ := syscall.UTF16PtrFromString("Course-Thru")

@@ -14,7 +14,7 @@
 
 ---
 
-## 二、四阶段工作回顾
+## 二、阶段工作回顾
 
 ### 阶段一：从零搭建（已完成）
 
@@ -69,6 +69,11 @@
 6. **端到端验证**（临时目录真实运行 `Course-Thru.exe` 首启全流程）：chrome://policy 9 条策略全部「正常」、默认搜索引擎为百度（扩展控制）、脚本猫 + 百度默认搜索两个扩展均正常加载、所有禁用参数在命令行可见、关闭浏览器后注册表策略自动清空恢复。
 7. **OCS 外部修改**：`extensions/ocs.user.js` 在本会话期间被外部改动（删除 OCS 更新模块与更新日志入口，约 135 行，非本会话所为），已保留未动。用户将在其他对话窗口继续维护 OCS 内容（只改内容不改名；改名会先通知）。
 8. **阶段四改动已提交并推送**（2026-08-07 复查确认）：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随提交 `bf66eb6`（关闭谷歌功能并以百度为默认搜索引擎）一并入库并推送 `origin/main`；另有 `61fc0c5`（抑制 CfT 横幅）与 `52efc8b`（交接文档更新）两个提交。本地与远程完全同步，工作区干净。
+
+### 阶段五：版本与日志小功能（2026-08-07）
+
+1. **版本号自动递增**：`version.txt` 单一来源（`x.y.z`），完整构建 patch 自动 +1 并写回、`-NoNsis` 便携调试复用、`-Version` 手动覆盖；安装包文件名与 AppVersion 带版本号，`dist\version.txt` 随产物分发。方案见 `VERSION.md`（提交 `b156b73`）。
+2. **严重错误日志自动打包**：启动器新增 `coursethru.log` 滚动日志（2 MB 轮转）；遇到致命错误（找不到 chromium、初始化失败、启动失败等）时自动把日志 + `version.txt` 打包为 zip 存入 `crash-logs\`，并打开文件夹定位 zip，错误弹窗内附 zip 路径，便于微信回传排查。端到端已实测（临时目录触发致命错误 → zip 自动生成，内容正确）。
 
 ---
 
@@ -125,6 +130,7 @@
 | 文件 | 职责 |
 |---|---|
 | `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动前写入 9 条 CfT 专用注册表策略并在浏览器退出后自动恢复（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载）；③ 默认扩展列表加入 `extensions/baidu-search`；④ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）。 |
+| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动前写入 9 条 CfT 专用注册表策略并在浏览器退出后自动恢复（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载）；③ 默认扩展列表加入 `extensions/baidu-search`；④ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）；⑤ 新增 `coursethru.log` 滚动日志（2 MB 轮转）与严重错误日志自动打包（`crash-logs\` zip + 自动打开文件夹，见阶段五第 2 条）。 |
 | `go.mod` | Go 模块定义（`coursethru/launcher`，go 1.26）。 |
 | `build.ps1` | 一键构建：下载固定版本组件（直连失败自动回退系统代理）→ 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 复制百度搜索扩展 → 编译启动器 → 生成/复用预置 profile → 写 `config.json`（默认扩展列表含 scriptcat + baidu-search）→ 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。**注意：文件必须保持 UTF-8 BOM（PowerShell 5.1 中文脚本依赖）**。 |
 | `extensions/baidu-search\manifest.json` | **2026-08-07 新增**。百度默认搜索引擎扩展（MV3，`chrome_settings_overrides.search_provider`），未托管机器上唯一可靠的默认搜索设置方式（sensitive 策略会被 Chrome 忽略）。 |
@@ -225,6 +231,7 @@ Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Pro
 |---|---|---|
 | 阶段四改动提交 | ✅ 已完成 | 2026-08-07：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随 `bf66eb6` 一并提交并推送，本地与远程同步 |
 | 版本号自动递增 | ✅ 已完成 | `version.txt` 单一来源；完整构建 patch 自动 +1、`-NoNsis` 复用、`-Version` 覆盖；安装包文件名与 AppVersion 带版本；方案见 `VERSION.md` |
+| 严重错误日志打包 | ✅ 已完成 | `coursethru.log` 滚动日志（2 MB 轮转）；致命错误时自动打包 zip 到 `crash-logs\` 并打开文件夹，弹窗附 zip 路径；端到端实测通过 |
 | OCS 外部维护 | 📋 已知 | 用户在其他对话窗口改 `extensions/ocs.user.js` 内容（不改名）；若内容里升了 `@version`，需同步更新 `build.ps1` 顶部 `$OcsTag`（不更新只是构建警告，不阻塞） |
 | `.claude/` 清理中断 | ⚠️ 待处理 | `find-skills` 访问被拒，技能内容大部分已删、剩空壳目录；用户已暂停清理，需决定恢复或彻底删除 |
 | `.tools/`、`.agents/`、`skills-lock.json` 是否清除 | ⚠️ 待用户决定 | 清理已叫停；`.tools` 为可重建缓存，`.agents`/`skills-lock.json` 由环境管理 |

@@ -11,6 +11,7 @@
 - ⚡ **开箱即用**：预置 profile 已开启「开发者模式」与「允许运行用户脚本」，OCS 已就绪；首次启动不弹任何引导页/信任提示
 - 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
+- 🧯 **错误日志自动打包**：程序遇到严重错误无法启动时，自动把日志打包为 zip 存到 `crash-logs\` 并打开文件夹，方便微信回传排查
 
 ## 使用
 
@@ -61,6 +62,7 @@ config.json.example             # 配置示例（默认页接口）
 dist/                           # 便携发布目录（构建产物）
 ├── Course-Thru.exe             # 启动器
 ├── config.json                 # 配置（默认页接口）
+├── crash-logs/                 # 严重错误时自动生成的日志 zip（首次出错时创建）
 ├── chrome/                     # Chromium for Testing
 ├── extensions/                 # ScriptCat 扩展 + ocs.user.js
 ├── profile_seed/               # 预置 profile（开发者模式 + userScripts 开关 + OCS 已预置启用）
@@ -102,6 +104,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 **Q：如何更换默认打开的网课平台？**
 编辑 `config.json` 的 `defaultUrl` 字段为对应平台地址，完全关闭浏览器后重启。
+
+**Q：浏览器打不开 / 启动报错怎么办？**
+启动器遇到严重错误时会自动把日志打包成 zip（`crash-logs\` 文件夹）并打开所在位置，把 zip 文件通过微信发给开发者即可定位问题。
 
 **Q：卸载后想保留账号/脚本数据？**
 卸载会删除 `%LOCALAPPDATA%\Course-Thru\` 全部数据。如需保留，卸载前复制该目录备份。
