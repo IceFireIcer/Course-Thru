@@ -39,11 +39,13 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescription: "附加任务:"; Flags: unchecked
+; 桌面图标任务不加 Flags: unchecked —— 缺省即默认勾选，安装完成桌面直接出现快捷方式
+Name: "desktopicon"; Description: "创建桌面快捷方式(&D)"; GroupDescription: "附加任务:"
 
 [Files]
 Source: "{#DIST}\chrome\*"; DestDir: "{app}\chrome"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\extensions\*"; DestDir: "{app}\extensions"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#DIST}\course-thru\*"; DestDir: "{app}\course-thru"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\profile_seed\*"; DestDir: "{app}\profile_seed"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\Course-Thru.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DIST}\config.json"; DestDir: "{app}"; Flags: ignoreversion

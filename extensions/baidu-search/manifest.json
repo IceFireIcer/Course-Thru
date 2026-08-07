@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "百度默认搜索",
-  "version": "1.0.0",
-  "description": "将默认搜索引擎设为百度（Course-Thru 内置）",
+  "name": "百度（Course-Thru 内置）",
+  "version": "1.1.0",
+  "description": "默认搜索引擎设为百度；新标签页直接打开百度，全程无确认框",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs"],
+  "host_permissions": ["https://www.baidu.com/"],
   "chrome_settings_overrides": {
     "search_provider": {
       "name": "百度",

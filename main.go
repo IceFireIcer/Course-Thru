@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +97,16 @@ func main() {
 		return
 	}
 
+	// 静默内置扩展的"接管设置"确认框（方案见 OPEN-VERSION-GUIDE.md §2）：
+	// 1) 清理旧版 chrome_url_overrides 残留（升级用户必做，否则旧记录会让
+	//    确认框继续弹出）；2) 把简单接管（默认搜索引擎）的时间戳预置为未来值，
+	//    让百度搜索扩展不再弹"更改搜索服务提供商是您的本意吗？"。
+	if ensureBaiduQuiet(profileDir) {
+		logf("已确保扩展接管静默（Preferences 时间戳预置/残留清理完成）")
+	} else {
+		logf("Preferences 接管静默处理跳过或失败（不影响主流程）")
+	}
+
 	// 组装启动参数
 	args := []string{
 		fmt.Sprintf("--user-data-dir=%s", profileDir),
@@ -136,11 +147,11 @@ func main() {
 	}
 	args = append(args, cfg.ExtraArgs...)
 
-	url := cfg.DefaultURL
-	if url == "" {
-		url = "about:blank"
-	}
-	args = append(args, url)
+	// 启动地址：defaultUrl 留空 → 内置主页（course-thru/index.html，随程序分发、
+	// 相对路径自包含）；填相对路径 → 解析为 file:// URL；填完整网址 → 原样打开。
+	startURL := resolveStartURL(exeDir, cfg.DefaultURL)
+	logf("启动地址: %s", startURL)
+	args = append(args, startURL)
 
 	// 首次运行标记：记录"首次初始化是否已完成"，决定是否执行欢迎页清理。
 	// 仅首次启动开启 CDP（端口由 Chromium 自动分配，写入 profile/DevToolsActivePort），
@@ -211,6 +222,92 @@ func loadConfig(exeDir string) Config {
 		_ = json.Unmarshal(v, &cfg.Extensions)
 	}
 	return cfg
+}
+
+// resolveStartURL 决定启动时打开的第一个地址：
+//   - 留空：使用内置主页 course-thru/index.html；
+//   - 相对路径（如 homepage/index.html）：解析为程序目录下的绝对路径并转成
+//     file:// URL（Windows 形如 file:///D:/xxx/homepage/index.html，空格与
+//     中文由 net/url 自动转义，页面必须用相对路径引用资源才能自包含）；
+//   - 完整网址（http/https/file 等）：原样返回。
+func resolveStartURL(exeDir, s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		s = filepath.Join("course-thru", "index.html")
+	}
+	// 已带协议或浏览器内置协议前缀的字符串按网址处理，其余按本地路径处理
+	if strings.Contains(s, "://") || strings.HasPrefix(s, "about:") ||
+		strings.HasPrefix(s, "chrome:") || strings.HasPrefix(s, "edge:") ||
+		strings.HasPrefix(s, "data:") {
+		return s
+	}
+	p := filepath.FromSlash(s)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(exeDir, p)
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs
+	}
+	u := &url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(p)}
+	return u.String()
+}
+
+// silentOverrideTimestamp 是 2099-01-01 对应的 Chrome base::Time 时间戳
+// （自 1601-01-01 起的微秒数）。Chrome 对"简单接管"扩展（如只改默认搜索）有
+// 静默机制：该字段达到此值即视为旧安装，不再弹"更改搜索服务提供商是您的本意吗？"。
+const silentOverrideTimestamp = int64(15715382400000000)
+
+// ensureBaiduQuiet 在启动浏览器前修正 profile 的 Default/Preferences：
+//  1. 删除 extensions.chrome_url_overrides 残留。旧版曾用该字段接管新标签页，
+//     Chrome 启动校验只清理"扩展已不存在"的记录，不会清理"扩展还在但已不再
+//     声明接管"的残留；当前内置扩展都不再声明接管，整字段删除是安全的。
+//  2. 把 extensions.simple_override_begin_confirmation_timestamp 预置为未来
+//     时间戳（缺失或小于目标值时写入）。Chrome 可能把该值改写为科学计数法
+//     （如 1.57153824e+16），读取比较时用 float64 兼容。
+//
+// 返回 false 表示文件缺失/解析失败等（正常跳过，不阻塞主流程）。
+func ensureBaiduQuiet(profileDir string) bool {
+	prefsPath := filepath.Join(profileDir, "Default", "Preferences")
+	data, err := os.ReadFile(prefsPath)
+	if err != nil {
+		return false
+	}
+	var root map[string]interface{}
+	if json.Unmarshal(data, &root) != nil {
+		return false
+	}
+	ext, _ := root["extensions"].(map[string]interface{})
+	if ext == nil {
+		ext = make(map[string]interface{})
+		root["extensions"] = ext
+	}
+	changed := false
+	if _, ok := ext["chrome_url_overrides"]; ok {
+		delete(ext, "chrome_url_overrides")
+		changed = true
+	}
+	if cur, ok := ext["simple_override_begin_confirmation_timestamp"].(float64); !ok ||
+		cur < float64(silentOverrideTimestamp) {
+		ext["simple_override_begin_confirmation_timestamp"] = silentOverrideTimestamp
+		changed = true
+	}
+	if !changed {
+		return true
+	}
+	out, err := json.Marshal(root)
+	if err != nil {
+		return false
+	}
+	// 先写临时文件再原子替换，避免写到一半的 Preferences 被 Chrome 读坏
+	tmp := prefsPath + ".launcher.tmp"
+	if err := os.WriteFile(tmp, out, 0644); err != nil {
+		return false
+	}
+	if err := os.Rename(tmp, prefsPath); err != nil {
+		_ = os.Remove(tmp)
+		return false
+	}
+	return true
 }
 
 // copyDir 递归复制目录内容。

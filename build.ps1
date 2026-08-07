@@ -285,7 +285,21 @@ if (-not (Test-Path (Join-Path $baiduExt "manifest.json"))) {
     Fail "缺少默认搜索引擎扩展 $baiduExt\manifest.json"
 }
 $baiduDist = Join-Path $Dist "extensions\baidu-search"
+# 目标目录存在时先删除再整体复制：直接 Copy-Item -Recurse 到已存在目录会
+# 嵌套成 baidu-search\baidu-search\...，旧 manifest 残留导致产物不是最新。
+if (Test-Path $baiduDist) { Remove-Item $baiduDist -Recurse -Force }
 Copy-Item -LiteralPath $baiduExt -Destination $baiduDist -Recurse -Force
+
+# 打包内置主页（course-thru\ -> dist\course-thru）：启动器 defaultUrl 留空时以
+# file:// 打开该页面。页面内资源全部相对路径引用，随程序分发即可自包含。
+$homepageSrc = Join-Path $Root "course-thru"
+if (-not (Test-Path (Join-Path $homepageSrc "index.html"))) {
+    Fail "缺少内置主页 $homepageSrc\index.html（course-thru 文件夹是浏览器主页，不能删除）"
+}
+$homepageDist = Join-Path $Dist "course-thru"
+if (Test-Path $homepageDist) { Remove-Item $homepageDist -Recurse -Force }
+Copy-Item -LiteralPath $homepageSrc -Destination $homepageDist -Recurse -Force
+Info "已打包内置主页: $homepageSrc -> $homepageDist"
 
 # 屏蔽 ScriptCat 安装成功欢迎页：unpacked 扩展每次启动都会触发
 # onInstalled(reason=install)，不屏蔽则每次打开浏览器都会弹出安装完成页。

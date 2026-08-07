@@ -26,6 +26,7 @@
 /CONSOLE-POLICY-NOTES.md
 /LOGO-REPLACEMENT.md
 /VERSION.md
+/OPEN-VERSION-GUIDE.md
 
 # ===== 密钥：私钥绝不上传。公钥 keys/scriptcat.key 需保留在仓库中以固定扩展 ID ====
 /keys/scriptcat_private.pem

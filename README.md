@@ -12,6 +12,8 @@
 - 🖥️ **默认最大化窗口**：每次启动都以最大化窗口打开（写死，不受首次启动限制约束）
 - 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
+- 🏠 **内置主页**：`course-thru/` 本地主页随程序分发，启动即打开（`file://` 自包含，离线可用）；可在 `config.json` 里换成任意网址
+- 🆕 **新标签页直达百度**：点「+」/ Ctrl+T 直接打开百度，全程无确认弹窗；从链接新开的标签页不受影响
 - 🛡️ **默认关闭谷歌功能**：同步、后台联网、组件更新、崩溃上报、翻译与 AI 功能均通过启动参数禁用；另有 9 条 CfT 专用注册表策略关闭登录/后台运行/安全浏览上报等，**只影响本程序，不影响用户日常 Chrome**
 - 🔍 **默认搜索引擎为百度**：通过内置扩展设置，设置页标注「由扩展控制」
 - 🧯 **错误日志自动打包**：程序遇到严重错误无法启动时，自动把日志打包为 zip 存到 `crash-logs\` 并打开文件夹，方便微信回传排查
@@ -43,7 +45,7 @@
 
 | 字段 | 说明 |
 | --- | --- |
-| `defaultUrl` | **启动后默认打开的网址**。留空打开空白页，填入如 `"https://www.chaoxing.com/"` 则启动即打开网课平台 |
+| `defaultUrl` | **启动后默认打开的网址**。留空打开内置主页（`course-thru/index.html`）；填相对路径（如 `"homepage/index.html"`）则打开程序目录下对应本地网页；填完整网址（如 `"https://www.chaoxing.com/"`）则启动即打开网课平台 |
 | `extraArgs` | 附加给 Chromium 的命令行参数数组，如 `["--disable-gpu"]` |
 | `appName` | 应用名（暂用于错误提示） |
 | `extensions` | 启动时加载的 unpacked 扩展目录（相对启动器目录） |
@@ -68,7 +70,8 @@ installer.iss                   # Inno Setup 安装脚本
 stop-browser.ps1                # 卸载时关闭本程序浏览器进程
 keys/scriptcat.key              # 扩展固定 key（勿删，删除会改变扩展 ID）
 extensions/ocs.user.js          # OCS 网课助手脚本（本地维护，构建时打包进产物）
-extensions/baidu-search/        # 百度默认搜索引擎扩展（chrome_settings_overrides）
+extensions/baidu-search/        # 百度内置扩展（默认搜索引擎 + 新标签页直达百度）
+course-thru/                    # 内置主页（index.html + fonts/js/logo，全部相对路径，随程序分发）
 config.json.example             # 配置示例（默认页接口）
 
 dist/                           # 便携发布目录（构建产物）
@@ -123,7 +126,10 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 打开浏览器 → 点击工具栏脚本猫图标 → 脚本管理 → 导入，或直接访问脚本站安装。脚本会保存在 `profile/` 中。
 
 **Q：如何更换默认打开的网课平台？**
-编辑 `config.json` 的 `defaultUrl` 字段为对应平台地址，完全关闭浏览器后重启。
+编辑 `config.json` 的 `defaultUrl` 字段：填完整网址（如 `https://www.chaoxing.com/`）打开网课平台，填相对路径（如 `homepage/index.html`）打开本地网页，留空恢复内置主页。完全关闭浏览器后重启生效。
+
+**Q：点「+」新建标签页为什么直接是百度？能改吗？**
+内置扩展会监听新建标签页并把 `chrome://newtab` 导航到百度（不接管浏览器设置，因此不弹确认框）。想换目标页，改 `background.js` 里的 `BAIDU_URL` 后重新构建即可。
 
 **Q：浏览器打不开 / 启动报错怎么办？**
 启动器遇到严重错误时会自动把日志打包成 zip（`crash-logs\` 文件夹）并打开所在位置，把 zip 文件通过微信发给开发者即可定位问题。
