@@ -6,7 +6,7 @@
 
 ## 特性
 
-- 🧩 **预置 ScriptCat**：通过 `--load-extension` 免安装加载，注入固定 key 使扩展 ID 恒定（`hodgdaljmnbiliahlpcjcpiphnkbmfff`）
+- 🧩 **预置 ScriptCat**：通过 `--load-extension` 免安装加载，注入固定 key 使扩展 ID 恒定
 - 📜 **预置 OCS 网课助手 4.15.3**：脚本直接写入 ScriptCat 存储并**默认启用**，支持超星学习通、知到智慧树、职教云、智慧职教、中国大学MOOC、雨课堂等平台
 - ⚡ **开箱即用**：预置 profile 已开启「开发者模式」与「允许运行用户脚本」，OCS 已就绪；首次启动不弹任何引导页/信任提示
 - 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
@@ -97,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ## 技术说明
 
 - **为什么用 Chromium for Testing 而非 Electron**：ScriptCat 依赖 `chrome.userScripts` API，Electron 不支持该 API（只支持 `chrome.scripting` 等子集），会导致脚本无法注入页面。Chromium（非 Chrome 品牌版）完全支持，且 `--load-extension` 命令行参数在 Chromium 上依然可用（Chrome 137 起仅 Google Chrome 品牌版移除了该参数）
-- **为什么注入 key**：unpacked 扩展无 `key` 字段时 ID 由安装路径决定，路径一变脚本数据就丢了。注入固定 key 后 ID 恒定（`hodgdaljmnbiliahlpcjcpiphnkbmfff`），预置数据可随 profile 移植
+- **为什么注入 key**：unpacked 扩展无 `key` 字段时 ID 由安装路径决定，路径一变脚本数据就丢了。注入固定 key 后 ID 恒定，预置数据可随 profile 移植
 - **为什么预置 profile**：ScriptCat 的 userScripts 开关与脚本数据存在扩展的 `chrome.storage.local`（LevelDB），构建时用真实 Chromium 配置好后打包，用户首次启动复制即开箱即用
 - **OCS 直接预置**：OCS 是 ScriptCat 的油猴脚本，生成 profile 时直接写入 ScriptCat 存储（`script:<uuid>` 元数据 + `scriptCode:<uuid>` 代码，`status:1` 默认启用），无需模拟点击安装，也不依赖网络
 - **开发者模式默认开启**：生成 profile 时通过 CDP 点击 chrome://extensions 的真实开关并持久化，首次启动不弹「开启开发者模式」信任提示
