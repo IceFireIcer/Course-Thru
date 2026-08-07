@@ -3,6 +3,14 @@
 /dist-installer/
 /Build-Product/
 
+# ===== 运行时数据与启动器产物（首次启动生成，绝不能上传）=====
+# dist/ 整体已忽略，这里显式列出关键项，防止未来调整 dist 忽略规则时误传
+/dist/profile/
+/dist/profile_seed/
+/dist/first_run.flag
+/dist/coursethru*.log
+/dist/crash-logs/
+
 # ===== 构建缓存（build.ps1 下载的组件：Chromium / Go / Inno Setup 等）=====
 /.tools/
 

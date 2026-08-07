@@ -54,6 +54,7 @@
 ```
 main.go / go.mod                # Go 启动器源码（GUI 子系统）
 build.ps1                       # 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译 → 打包
+patch-branding.py               # 构建期替换语言包里的 "Chrome for Testing" 品牌字样（幂等）
 VERSION.md / version.txt        # 版本管理方案 / 版本号单一来源（完整构建自动递增）
 gen-profile.mjs                 # CDP 生成预置 profile（直接写入 ScriptCat 存储预置 OCS，默认启用）
 installer.iss                   # Inno Setup 安装脚本
@@ -105,6 +106,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **不能加 `--disable-extensions-except`**：该参数会触发 Chromium「先禁用全部扩展再重启进程」流程，首次启动会弹「加载扩展程序时候出错」并延迟出窗
 - **默认搜索用扩展而非策略**：`DefaultSearchProvider*` 是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略；`chrome_settings_overrides.search_provider` 扩展机制在 unpacked 扩展上直接生效
 - **多扩展必须逗号合并**：`--load-extension` 是单值开关，重复传多个只认最后一个，因此 ScriptCat 与百度扩展必须合并为一个参数值
+- **品牌字样靠构建期替换语言包**：CDP 与企业策略都无法修改窗口标题模板、新标签页「自定义」按钮、设置「关于」页里的 "Chrome for Testing" 字样——这些字符串编译在 `locales\*.pak` 资源里。`patch-branding.py` 在 Chromium 解压后统一替换为 "Course-Thru 课速通"，幂等可重复执行；升级 Chromium 版本后由构建自动重新打补丁
+- **只保留中英繁三语语言包**：构建时裁剪 Chromium `locales\*.pak`（保留 en-US / zh-CN / zh-TW，含性别变体）与 ScriptCat `_locales`（保留 en / zh_CN / zh_TW）。首选语言包缺失时 Chrome 自动回退 en-US、扩展回退 `default_locale`（en），程序不会报错；保留清单在 `build.ps1` 顶部的 `$KeepChromeLocales` / `$KeepExtLocales`
 
 ## 常见问题
 

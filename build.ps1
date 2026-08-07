@@ -25,6 +25,14 @@ $ScriptCatUrl  = "https://github.com/scriptscat/scriptcat/releases/download/$Scr
 # 自动更新：脚本自带官方「更新模块」，且 gen-profile.mjs 预置时开启 ScriptCat 自动更新
 # （checkUpdate: true，更新源为 GitHub 最新 Release 资产，见 gen-profile.mjs 的 origin）。
 
+# ------- 语言裁剪（只保留中英繁三语，减小发布体积） -------
+# Chromium locales：只保留 en-US / zh-CN / zh-TW（含 FEMININE/MASCULINE/NEUTER
+# 变体文件）。Chrome 找不到首选语言包时会自动回退到 en-US，不会报错。
+# ScriptCat 扩展 _locales：只保留 en / zh_CN / zh_TW，其 manifest 声明
+# default_locale=en，浏览器语言被裁剪时扩展文案自动回退英文。
+$KeepChromeLocales = @("en-US", "zh-CN", "zh-TW")
+$KeepExtLocales    = @("en", "zh_CN", "zh_TW")
+
 function Info($m)   { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m)   { Write-Host "[build] 警告: $m" -ForegroundColor Yellow }
 function Fail($m)   { Write-Host "[build] 错误: $m" -ForegroundColor Red; exit 1 }
@@ -139,6 +147,31 @@ if (-not (Test-Path (Join-Path $distChrome "chrome.exe"))) {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# 语言包裁剪（幂等：已有 dist 也会在下次构建时补齐裁剪）
+$localesDir = Join-Path $distChrome "locales"
+if (Test-Path $localesDir) {
+    $keepPattern = "^($(($KeepChromeLocales | ForEach-Object { [regex]::Escape($_) }) -join '|'))(_(FEMININE|MASCULINE|NEUTER))?\.pak$"
+    $removedLocales = @(Get-ChildItem $localesDir -Filter "*.pak" -File | Where-Object { $_.Name -notmatch $keepPattern })
+    foreach ($f in $removedLocales) { Remove-Item -LiteralPath $f.FullName -Force }
+    if ($removedLocales.Count -gt 0) {
+        Info "已裁剪 Chromium 语言包：删除 $($removedLocales.Count) 个，保留 $($KeepChromeLocales -join ' / ')"
+    }
+}
+
+# ============ 3.5 品牌字符串替换（构建期）============
+# Chrome for Testing 的“Chrome for Testing”品牌字样编译在语言包资源
+# （locales\*.pak、resources.pak）里，CDP 与企业策略都无法修改，只能在
+# 构建期替换。脚本幂等：无匹配的文件保持原样，可重复执行。
+$brandScript = Join-Path $Root "patch-branding.py"
+if (-not (Test-Path $brandScript)) {
+    Fail "缺少品牌替换脚本 $brandScript"
+}
+$pakFiles = @(Get-ChildItem (Join-Path $distChrome "locales\*.pak") -File)
+$pakFiles += Join-Path $distChrome "resources.pak"
+Info "替换品牌字符串（Chrome for Testing -> Course-Thru）..."
+& python $brandScript $pakFiles
+if ($LASTEXITCODE -ne 0) { Fail "品牌字符串替换失败" }
+
 # ============ 4. 准备 ScriptCat 扩展（注入 key）============
 $extDir = Join-Path $Dist "extensions\scriptcat"
 if (-not (Test-Path (Join-Path $extDir "manifest.json"))) {
@@ -149,6 +182,15 @@ if (-not (Test-Path (Join-Path $extDir "manifest.json"))) {
     if (-not $src) { Fail "ScriptCat 解压结构异常" }
     Copy-Item $src $extDir -Recurse -Force
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+# 语言包裁剪：ScriptCat _locales 只保留中英繁三语（幂等）
+$extLocalesDir = Join-Path $extDir "_locales"
+if (Test-Path $extLocalesDir) {
+    $removedExtLocales = @(Get-ChildItem $extLocalesDir -Directory | Where-Object { $_.Name -notin $KeepExtLocales })
+    foreach ($d in $removedExtLocales) { Remove-Item -LiteralPath $d.FullName -Recurse -Force }
+    if ($removedExtLocales.Count -gt 0) {
+        Info "已裁剪 ScriptCat 语言包：删除 $($removedExtLocales.Count) 个，保留 $($KeepExtLocales -join ' / ')"
+    }
 }
 # 注入 key（每次构建都确保存在）
 $mfPath = Join-Path $extDir "manifest.json"
