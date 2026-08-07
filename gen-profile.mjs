@@ -177,13 +177,14 @@ function buildOcsEntry(code) {
   const name = metadata.name?.[0] || 'OCS 网课助手';
   const uuid = crypto.randomUUID();
   const now = Date.now();
-  const origin = 'https://raw.githubusercontent.com/ocsjs/ocsjs/master/dist/ocs.user.js';
+  // ScriptCat 自动更新源：GitHub 最新 Release 资产（稳定 URL，始终指向最新版本）
+  const origin = 'https://github.com/ocsjs/ocsjs/releases/latest/download/ocs.user.js';
   return {
     uuid,
     script: {
       author: metadata.author?.[0] || '',
-      checkUpdate: false, // 关闭自动更新检查，避免向失效地址发请求
-      checkUpdateUrl: '',
+      checkUpdate: true, // 开启 ScriptCat 自动更新检查（对比 @version，发现新版自动提示）
+      checkUpdateUrl: origin,
       checktime: now,
       createtime: now,
       downloadUrl: origin,
@@ -191,7 +192,7 @@ function buildOcsEntry(code) {
       name,
       namespace: metadata.namespace?.[0] || '',
       origin,
-      originDomain: 'raw.githubusercontent.com',
+      originDomain: 'github.com',
       runStatus: 'complete',
       selfMetadata: {},
       sort: 0,

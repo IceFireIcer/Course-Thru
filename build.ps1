@@ -22,6 +22,8 @@ $ChromeUrl     = "https://registry.npmmirror.com/-/binary/chrome-for-testing/$Ch
 $ScriptCatUrl  = "https://github.com/scriptscat/scriptcat/releases/download/$ScriptCatTag/scriptcat-$ScriptCatTag-chrome.zip"
 # OCS 脚本已随仓库维护（extensions\ocs.user.js），不再从 GitHub Release 下载；
 # $OcsTag 仅作为本地文件的版本一致性校验参考。
+# 自动更新：脚本自带官方「更新模块」，且 gen-profile.mjs 预置时开启 ScriptCat 自动更新
+# （checkUpdate: true，更新源为 GitHub 最新 Release 资产，见 gen-profile.mjs 的 origin）。
 
 function Info($m)   { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m)   { Write-Host "[build] 警告: $m" -ForegroundColor Yellow }

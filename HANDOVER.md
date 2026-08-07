@@ -35,7 +35,7 @@
    - 清理了 `dist\chrome\.tools\profile-tmp` 开发期残留（约 10 MB），并在 `build.ps1` 增加打包前自动清理步骤（7.5 节）。
    - 清除了 `Build-Product\portable\profile` 用户数据（恢复出厂态）。
    - 尝试清除 `.tools/`、`.agents/`、`.claude/`、`skills-lock.json` —— **用户已叫停**，详见第三节「清理动作的实际状态」。
-6. **OCS 本地化**：不再从 GitHub Release 下载，`ocs.user.js`（4.15.3）入库为 `extensions/ocs.user.js`，构建时直接复制进产物（`dist\extensions\ocs.user.js`），升级只需替换该文件并核对 `build.ps1` 顶部的 `$OcsTag`。
+6. **OCS 本地化**：不再从 GitHub Release 下载，`ocs.user.js`（4.15.3）入库为 `extensions/ocs.user.js`，构建时直接复制进产物（`dist\extensions\ocs.user.js`），升级只需替换该文件并核对 `build.ps1` 顶部的 `$OcsTag`。**2026-08-07 刷新**：已重新从 GitHub Release 拉取最新原版（4.15.3）整体替换（哈希与官方发布资产一致、未做改动），此前外部修改（删除更新模块与更新日志入口）随之清除，脚本自带「📥 更新模块」恢复，自动更新能力保留。
 7. **gen-profile.mjs 重写**（修时序 + 改架构）：
    - 去掉本地 HTTP 服务器和模拟点击安装：OCS 是 ScriptCat 的油猴脚本，现在**直接写入 ScriptCat 的 `chrome.storage.local`**（`script:<uuid>` 元数据 + `scriptCode:<uuid>` 代码，`status:1` 默认启用）；
    - 全部等待改为**真实信号驱动**（页面端 MutationObserver + 条件等待），不再固定 sleep；
@@ -67,13 +67,21 @@
 4. **注册表策略现为 9 条**（全部非 sensitive，未托管机器实测全部「正常」生效）：`BrowserSignin=0`（关登录入口）、`SyncDisabled=1`（关同步）、`BackgroundModeEnabled=0`（关后台运行）、`SafeBrowsingProtectionLevel=0`（关安全浏览，副作用：不拦截恶意网站）、`SafeBrowsingExtendedReportingEnabled=0`、`SafeBrowsingSurveysEnabled=0`、`PasswordLeakDetectionEnabled=0`（密码哈希不再发谷歌）、`SearchSuggestEnabled=0`（搜索建议不再外发）、`NetworkPredictionOptions=2`（关网络预加载）。排除的 sensitive 策略：`MetricsReportingEnabled`、`SafeBrowsingEnabled`、`DefaultSearchProvider*`（写了也被忽略；UMA 上传已由 `--disable-background-networking` 在网络层关闭）。
 5. **修复 `--load-extension` 多扩展 bug**：该开关是单值开关，重复传多个时 Chromium 只认最后一个 → 多个扩展必须用逗号合并为一个参数值（`--load-extension=a,b`）。此前只有 ScriptCat 单扩展未暴露，加入百度扩展后脚本猫不再加载，已修复并验证。
 6. **端到端验证**（临时目录真实运行 `Course-Thru.exe` 首启全流程）：chrome://policy 9 条策略全部「正常」、默认搜索引擎为百度（扩展控制）、脚本猫 + 百度默认搜索两个扩展均正常加载、所有禁用参数在命令行可见、关闭浏览器后注册表策略自动清空恢复。
-7. **OCS 外部修改**：`extensions/ocs.user.js` 在本会话期间被外部改动（删除 OCS 更新模块与更新日志入口，约 135 行，非本会话所为），已保留未动。用户将在其他对话窗口继续维护 OCS 内容（只改内容不改名；改名会先通知）。
+7. **OCS 恢复上游原版并启用自动更新**（2026-08-07）：`extensions/ocs.user.js` 曾在本会话期间被外部改动（删除 OCS 更新模块与更新日志入口，约 135 行，非本会话所为）。现已从 GitHub Release（`ocsjs/ocsjs` 最新 4.15.3）重新拉取并整体替换为未修改的原版脚本：被删除的「📥 更新模块」与更新日志入口已恢复，功能完整保留；同时 `gen-profile.mjs` 预置 OCS 时开启 ScriptCat 自动更新（`checkUpdate: true`，更新源改为有效的 GitHub 最新 Release 资产 URL），`dist\profile_seed` 已重新生成并验证。
 8. **阶段四改动已提交并推送**（2026-08-07 复查确认）：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随提交 `bf66eb6`（关闭谷歌功能并以百度为默认搜索引擎）一并入库并推送 `origin/main`；另有 `61fc0c5`（抑制 CfT 横幅）与 `52efc8b`（交接文档更新）两个提交。本地与远程完全同步，工作区干净。
 
 ### 阶段五：版本与日志小功能（2026-08-07）
 
 1. **版本号自动递增**：`version.txt` 单一来源（`x.y.z`），完整构建 patch 自动 +1 并写回、`-NoNsis` 便携调试复用、`-Version` 手动覆盖；安装包文件名与 AppVersion 带版本号，`dist\version.txt` 随产物分发。方案见 `VERSION.md`（提交 `b156b73`）。
 2. **严重错误日志自动打包**：启动器新增 `coursethru.log` 滚动日志（2 MB 轮转）；遇到致命错误（找不到 chromium、初始化失败、启动失败等）时自动把日志 + `version.txt` 打包为 zip 存入 `crash-logs\`，并打开文件夹定位 zip，错误弹窗内附 zip 路径，便于微信回传排查。端到端已实测（临时目录触发致命错误 → zip 自动生成，内容正确）。
+
+### 阶段六：OCS 恢复上游原版并启用自动更新（2026-08-07）
+
+1. **重新拉取并整体替换**：从 OCS 官方仓库 `ocsjs/ocsjs` 的 GitHub Release 重新拉取最新脚本 4.15.3（`releases/latest/download/ocs.user.js` 与 tag 资产 SHA-256 一致），整体替换 `extensions/ocs.user.js`（仓库源）、`dist\extensions\ocs.user.js` 与 `Build-Product\portable\extensions\ocs.user.js`（产物副本）。之前外部修改删除的「📥 更新模块」（约 135 行，官方更新源 `cdn.ocsjs.com`）与更新日志入口全部恢复，脚本与上游完全一致、功能完整保留。
+2. **开启 ScriptCat 自动更新**：`gen-profile.mjs` 预置 OCS 时把 `checkUpdate: false` 改为 `checkUpdate: true`，并把失效的更新地址（`raw.githubusercontent.com/ocsjs/ocsjs/master/dist/ocs.user.js`，404）替换为稳定有效的 GitHub 最新 Release 资产 URL（`https://github.com/ocsjs/ocsjs/releases/latest/download/ocs.user.js`）。ScriptCat 会定期对比 `@version`，发现新版自动提示；与脚本自带官方更新模块形成双通道自动更新。
+3. **重新生成并验证 profile_seed**：用 `gen-profile.mjs` 以真实 Chromium 重新生成 `dist\profile_seed` 并同步 `Build-Product\portable\profile_seed`。验证通过：OCS 4.15.3 写入 ScriptCat 存储且管理面板可见、开发者模式与 userScripts 开关持久化（SW 实测）、无会话恢复数据残留。
+4. **构建脚本注释同步**：`build.ps1` 顶部补充自动更新机制说明（脚本自带更新模块 + ScriptCat `checkUpdate`）；`$OcsTag` 仍为 4.15.3，与替换后的脚本一致。
+5. **本次改动尚未提交**：`extensions/ocs.user.js`、`gen-profile.mjs`、`build.ps1`、`HANDOVER.md` 均为工作区改动；`dist\`、`Build-Product\` 为 gitignore 产物，不提交。
 
 ---
 
@@ -133,8 +141,8 @@
 | `go.mod` | Go 模块定义（`coursethru/launcher`，go 1.26）。 |
 | `build.ps1` | 一键构建：下载固定版本组件（直连失败自动回退系统代理）→ 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 复制百度搜索扩展 → 编译启动器 → 生成/复用预置 profile → 写 `config.json`（默认扩展列表含 scriptcat + baidu-search）→ 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。**注意：文件必须保持 UTF-8 BOM（PowerShell 5.1 中文脚本依赖）**。 |
 | `extensions/baidu-search\manifest.json` | **2026-08-07 新增**。百度默认搜索引擎扩展（MV3，`chrome_settings_overrides.search_provider`），未托管机器上唯一可靠的默认搜索设置方式（sensitive 策略会被 Chrome 忽略）。 |
-| `gen-profile.mjs` | CDP 驱动真实 Chromium 生成预置 profile：**直接写入 ScriptCat 存储预置 OCS（默认启用）**，开启开发者模式与 userScripts 开关，关闭→重启→自动验证。信号驱动（DOM 条件等待），无固定 sleep。由 `build.ps1` 调用。 |
-| `extensions/ocs.user.js` | OCS 网课助手脚本（4.15.3），**本地维护、随仓库入库**；构建时复制进产物，由 `gen-profile.mjs` 预置到 ScriptCat 存储并默认启用。 |
+| `gen-profile.mjs` | CDP 驱动真实 Chromium 生成预置 profile：**直接写入 ScriptCat 存储预置 OCS（默认启用）**，开启开发者模式与 userScripts 开关，关闭→重启→自动验证。信号驱动（DOM 条件等待），无固定 sleep。**2026-08-07**：预置 OCS 时开启 ScriptCat 自动更新（`checkUpdate: true`，更新源为 GitHub 最新 Release 资产 URL）。由 `build.ps1` 调用。 |
+| `extensions/ocs.user.js` | OCS 网课助手脚本（4.15.3，GitHub Release 最新原版、未改动），**随仓库入库**；自带官方「📥 更新模块」，并由 `gen-profile.mjs` 开启 ScriptCat 自动更新检查（双通道自动更新）。构建时复制进产物，由 `gen-profile.mjs` 预置到 ScriptCat 存储并默认启用。 |
 | `installer.iss` | Inno Setup 安装脚本：把 `dist/` 内容装到 `{app}`，创建快捷方式，卸载时调用 `stop-browser.ps1` 并删除应用目录。 |
 | `stop-browser.ps1` | 卸载辅助：按路径关闭本程序启动的浏览器进程，不影响用户自己的 Chrome。 |
 | `keys\scriptcat.key` | ScriptCat 扩展公钥（736 B，base64）。扩展 ID 由此确定，**缺失时构建直接报错**。 |
@@ -231,7 +239,7 @@ Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Pro
 | 阶段四改动提交 | ✅ 已完成 | 2026-08-07：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随 `bf66eb6` 一并提交并推送，本地与远程同步 |
 | 版本号自动递增 | ✅ 已完成 | `version.txt` 单一来源；完整构建 patch 自动 +1、`-NoNsis` 复用、`-Version` 覆盖；安装包文件名与 AppVersion 带版本；方案见 `VERSION.md` |
 | 严重错误日志打包 | ✅ 已完成 | `coursethru.log` 滚动日志（2 MB 轮转）；致命错误时自动打包 zip 到 `crash-logs\` 并打开文件夹，弹窗附 zip 路径；端到端实测通过 |
-| OCS 外部维护 | 📋 已知 | 用户在其他对话窗口改 `extensions/ocs.user.js` 内容（不改名）；若内容里升了 `@version`，需同步更新 `build.ps1` 顶部 `$OcsTag`（不更新只是构建警告，不阻塞） |
+| OCS 脚本维护 | ✅ 已完成 | 2026-08-07：已替换为 GitHub Release 最新原版 4.15.3 并启用自动更新（脚本自带更新模块 + ScriptCat `checkUpdate: true`，更新源为 GitHub 最新 Release 资产）。后续升级：替换 `extensions/ocs.user.js` → 同步 `build.ps1` 顶部 `$OcsTag` → 重新生成 `profile_seed` |
 | `.claude/` 清理中断 | ⚠️ 待处理 | `find-skills` 访问被拒，技能内容大部分已删、剩空壳目录；用户已暂停清理，需决定恢复或彻底删除 |
 | `.tools/`、`.agents/`、`skills-lock.json` 是否清除 | ⚠️ 待用户决定 | 清理已叫停；`.tools` 为可重建缓存，`.agents`/`skills-lock.json` 由环境管理 |
 | `gen-profile.mjs` 时序/流程 | ✅ 已修复 | 已改为信号驱动 + 直接存储注入（无服务器、无 UI 点击安装）；`profile_seed` 已用新流程重新生成并端到端验证（OCS 预置启用、开发者模式开启、无欢迎页、无扩展错误、跨路径可移植） |
@@ -246,6 +254,6 @@ Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Pro
 
 ## 八、接手建议（suggested skills）
 
-- 无强制技能。下一步大概率是：维护 OCS 脚本内容（直接编辑 `extensions/ocs.user.js`，注意 `build.ps1` 的 `$OcsTag` 版本校验）、按第六节命令重建/验证、或处理清理相关的未决事项（`.claude/`、`.tools/` 等）。
+- 无强制技能。下一步大概率是：按阶段六/第七节维护 OCS（替换 `extensions/ocs.user.js` → 更新 `$OcsTag` → 重新生成 `profile_seed`；脚本自带更新模块 + ScriptCat 自动更新双通道兜底）、按第六节命令重建/验证、或处理清理相关的未决事项（`.claude/`、`.tools/` 等）。
 - 若需要排查浏览器/构建行为异常（如扩展加载失败、参数失效），可考虑 `diagnosing-bugs` 技能。
 - 若后续产出视频类产物（如产品演示），仓库技能库 `.agents/skills` 下有 hyperframes 系列（`changelog-video`、`general-video` 等），按需选用。
