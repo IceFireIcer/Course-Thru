@@ -57,14 +57,13 @@
 ```
 main.go / go.mod                # Go 启动器源码（GUI 子系统）
 build.ps1                       # 一键构建：下载组件 → 注入 key → 装配 ScriptCat → 编译 → 打包
-patch-branding.py               # 构建期替换语言包里的 "Chrome for Testing" 品牌字样（幂等）
+patch-branding.py               # 构建期替换语言包里的 "Chrome for Testing" 品牌字样与版权署名（幂等）
 generate-assets.py              # 从 logo/logo.png 生成 assets\ 全套 logo 资源（幂等）
 patch-logo.py                   # 构建期替换 Chromium pak 里的产品 logo 图片（内容识别，幂等）
 patch-icons.py                  # 构建期替换 chrome.exe / chrome.dll / 启动器 PE 图标（幂等）
 assets/                         # 生成的 logo 资源（app.ico / 向导图 / pak 内嵌 PNG / ScriptCat 图标）
 logo/logo.png                   # 唯一 logo 源文件
-LOGO-REPLACEMENT.md             # logo 全链路替换方案、验证清单与踩坑记录
-VERSION.md / version.txt        # 版本管理方案 / 版本号单一来源（完整构建自动递增）
+version.txt                     # 版本号单一来源（完整构建自动递增）
 gen-profile.mjs                 # CDP 生成预置 profile（直接写入 ScriptCat 存储预置 OCS，默认启用）
 installer.iss                   # Inno Setup 安装脚本
 stop-browser.ps1                # 卸载时关闭本程序浏览器进程
@@ -102,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 组件版本固定（Chromium 152、ScriptCat v1.4.0、OCS 4.15.3），保证可复现；OCS 脚本本地维护（`extensions/ocs.user.js`），不依赖 GitHub 下载
 - `-SkipProfile` 跳过预置 profile 生成（复用已有 `dist\profile_seed`）
 - `-NoNsis` 跳过安装包（只产出便携 `dist`）
-- `-Version x.y.z` 手动指定构建版本（默认完整构建 patch 自动 +1，版本方案见 `VERSION.md`）
+- `-Version x.y.z` 手动指定构建版本（默认完整构建 patch 自动 +1，`-NoNsis` 复用当前版本）
 - 若本地 OCS 脚本的 `@version` 与 `build.ps1` 顶部 `$OcsTag` 不一致，构建会警告但不阻塞（升级 OCS 后请同步更新 `$OcsTag`）
 
 ## 技术说明
@@ -112,12 +111,12 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **为什么预置 profile**：ScriptCat 的 userScripts 开关与脚本数据存在扩展的 `chrome.storage.local`（LevelDB），构建时用真实 Chromium 配置好后打包，用户首次启动复制即开箱即用
 - **OCS 直接预置**：OCS 是 ScriptCat 的油猴脚本，生成 profile 时直接写入 ScriptCat 存储（`script:<uuid>` 元数据 + `scriptCode:<uuid>` 代码，`status:1` 默认启用），无需模拟点击安装，也不依赖网络
 - **开发者模式默认开启**：生成 profile 时通过 CDP 点击 chrome://extensions 的真实开关并持久化，首次启动不弹「开启开发者模式」信任提示
-- **首次启动只开一个空白页**：生成流程的窗口会话数据已从种子中清理（三重保险：gen-profile、build.ps1、启动器），不会恢复出多余标签页
+- **首次启动只开一个页面**：启动打开内置主页 `course-thru/index.html`；生成流程的窗口会话数据已从种子中清理（三重保险：gen-profile、build.ps1、启动器），不会恢复出多余标签页
 - **不能加 `--disable-extensions-except`**：该参数会触发 Chromium「先禁用全部扩展再重启进程」流程，首次启动会弹「加载扩展程序时候出错」并延迟出窗
 - **默认搜索用扩展而非策略**：`DefaultSearchProvider*` 是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略；`chrome_settings_overrides.search_provider` 扩展机制在 unpacked 扩展上直接生效
 - **多扩展必须逗号合并**：`--load-extension` 是单值开关，重复传多个只认最后一个，因此 ScriptCat 与百度扩展必须合并为一个参数值
-- **品牌字样靠构建期替换语言包**：CDP 与企业策略都无法修改窗口标题模板、新标签页「自定义」按钮、设置「关于」页里的 "Chrome for Testing" 字样——这些字符串编译在 `locales\*.pak` 资源里。`patch-branding.py` 在 Chromium 解压后统一替换为 "Course-Thru 课速通"，幂等可重复执行；升级 Chromium 版本后由构建自动重新打补丁
-- **品牌 logo 靠构建期替换资源**：Chrome 图标/产品 logo 编译在 `chrome_*.pak`、`resources.pak` 与 chrome.exe / chrome.dll 的 PE 资源里，同样无法用命令行或策略修改。构建期用 `patch-logo.py`（内容识别替换 pak 内 PNG）与 `patch-icons.py`（重建资源段替换 PE 图标）统一换成 `logo/logo.png` 派生的全套资源；ScriptCat 工具栏图标与 Inno Setup 安装包图标/向导图也一并替换。完整方案与验证清单见 `LOGO-REPLACEMENT.md`
+- **品牌字样与版权署名靠构建期替换**：CDP 与企业策略都无法修改窗口标题模板、新标签页「自定义」按钮、设置「关于」页里的 "Chrome for Testing" 字样——这些字符串编译在 `locales\*.pak` 资源里。`patch-branding.py` 在 Chromium 解压后统一替换为 "Course-Thru 课速通"，并把 "Google LLC." 替换为 "IceFire_Icer."；`build.ps1` 还会替换 `ABOUT` 文件里的完整版权行。全部幂等可重复执行，升级 Chromium 版本后由构建自动重新打补丁
+- **品牌 logo 靠构建期替换资源**：Chrome 图标/产品 logo 编译在 `chrome_*.pak`、`resources.pak` 与 chrome.exe / chrome.dll 的 PE 资源里，同样无法用命令行或策略修改。构建期用 `generate-assets.py`（从 `logo/logo.png` 生成全套资源）、`patch-logo.py`（内容识别替换 pak 内 PNG）与 `patch-icons.py`（重建资源段替换 PE 图标）统一换成品牌 logo；ScriptCat 工具栏图标与 Inno Setup 安装包图标/向导图也一并替换
 - **只保留中英繁三语语言包**：构建时裁剪 Chromium `locales\*.pak`（保留 en-US / zh-CN / zh-TW，含性别变体）与 ScriptCat `_locales`（保留 en / zh_CN / zh_TW）。首选语言包缺失时 Chrome 自动回退 en-US、扩展回退 `default_locale`（en），程序不会报错；保留清单在 `build.ps1` 顶部的 `$KeepChromeLocales` / `$KeepExtLocales`
 
 ## 常见问题
