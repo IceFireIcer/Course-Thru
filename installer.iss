@@ -60,3 +60,29 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 ; 卸载时删除整个应用目录（含用户数据）
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+
+[Code]
+// 清理本程序写入的 CfT 企业策略（常驻策略，卸载时必须删除，
+// 否则残留会影响同账户下其他 Chrome for Testing 浏览器）
+procedure DeleteCftPolicies();
+var
+  Key: string;
+begin
+  Key := 'Software\Policies\Google\Chrome for Testing';
+  RegDeleteValue(HKCU, Key, 'BrowserSignin');
+  RegDeleteValue(HKCU, Key, 'SyncDisabled');
+  RegDeleteValue(HKCU, Key, 'BackgroundModeEnabled');
+  RegDeleteValue(HKCU, Key, 'SafeBrowsingProtectionLevel');
+  RegDeleteValue(HKCU, Key, 'SafeBrowsingExtendedReportingEnabled');
+  RegDeleteValue(HKCU, Key, 'SafeBrowsingSurveysEnabled');
+  RegDeleteValue(HKCU, Key, 'PasswordLeakDetectionEnabled');
+  RegDeleteValue(HKCU, Key, 'SearchSuggestEnabled');
+  RegDeleteValue(HKCU, Key, 'NetworkPredictionOptions');
+  RegDeleteKeyIncludingSubkeys(HKCU, Key);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    DeleteCftPolicies();
+end;

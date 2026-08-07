@@ -1,6 +1,6 @@
 # Course-Thru（课速通）交接文档（更新版）
 
-> 更新时间：2026-08-07（第五阶段后修订：git 状态与远程地址已同步至新仓库 Course-Thru；README 中扩展 ID 已移除）
+> 更新时间：2026-08-07（第五阶段后修订：git 状态与远程地址已同步至新仓库 Course-Thru；README 中扩展 ID 已移除；CfT 企业策略改为常驻设计，见 `CONSOLE-POLICY-NOTES.md`）
 > 项目：Course-Thru（课速通）— 基于 Chromium + ScriptCat + OCS 的刷网课浏览器（Windows）
 > 阅读顺序：先读 README.md 了解使用方式，再读本文了解来龙去脉与当前状态。
 
@@ -63,10 +63,10 @@
    - 服务类 feature：`--disable-features=OptimizationHints`（优化指导服务）、`NetworkTimeServiceQuerying`（网络时间服务）、`Translate`（谷歌翻译）；
    - AI 类 feature（M152 源码确认的功能名）：`Compose,PrivateAi,OptimizationGuideModelExecution,OptimizationGuideOnDeviceModel,OnDeviceModelBackgroundDownload,ModelQualityLogging,HistoryEmbeddings,HistoryEmbeddingsAnswers,GoogleSearchAiModeWorkspace,TextSafetyClassifier`。
 2. **默认搜索引擎改为百度**：新增 `extensions/baidu-search/`（MV3，`chrome_settings_overrides.search_provider`）。为什么不用策略：`DefaultSearchProvider*` 是 sensitive 策略，未加入域的机器上 Chrome 会直接忽略（已实测：chrome://policy 显示「错误, 已忽略」）。扩展方案实测生效：设置页显示「百度（默认）」并标注由扩展控制。
-3. **企业策略关闭谷歌登录/同步/后台运行**（只能走注册表，CDP 与启动参数都无法完成）：`main.go` 新增 `applyCftPolicies()`，启动前写入 `HKCU\Software\Policies\Google\Chrome for Testing`，浏览器退出后自动恢复。关键发现：CfT 的策略注册表路径是 `...\Google\Chrome for Testing`（通过扫描 chrome.dll 二进制字符串 + 实测双重确认），**与日常 Chrome 的 `...\Google\Chrome` 不同，因此这些策略不影响用户日常使用的 Chrome**。
+3. **企业策略关闭谷歌登录/同步/后台运行**（只能走注册表，CDP 与启动参数都无法完成）：`main.go` 新增 `applyCftPolicies()`，启动时逐条查询 `HKCU\Software\Policies\Google\Chrome for Testing`，缺失或值不对才写入；策略**常驻注册表、退出不删除**，卸载时由安装器 `DeleteCftPolicies` 清理（设计定稿见 `CONSOLE-POLICY-NOTES.md`；早期版本曾采用"退出删除并还原旧值"，后取消）。关键发现：CfT 的策略注册表路径是 `...\Google\Chrome for Testing`（通过扫描 chrome.dll 二进制字符串 + 实测双重确认），**与日常 Chrome 的 `...\Google\Chrome` 不同，因此这些策略不影响用户日常使用的 Chrome**。
 4. **注册表策略现为 9 条**（全部非 sensitive，未托管机器实测全部「正常」生效）：`BrowserSignin=0`（关登录入口）、`SyncDisabled=1`（关同步）、`BackgroundModeEnabled=0`（关后台运行）、`SafeBrowsingProtectionLevel=0`（关安全浏览，副作用：不拦截恶意网站）、`SafeBrowsingExtendedReportingEnabled=0`、`SafeBrowsingSurveysEnabled=0`、`PasswordLeakDetectionEnabled=0`（密码哈希不再发谷歌）、`SearchSuggestEnabled=0`（搜索建议不再外发）、`NetworkPredictionOptions=2`（关网络预加载）。排除的 sensitive 策略：`MetricsReportingEnabled`、`SafeBrowsingEnabled`、`DefaultSearchProvider*`（写了也被忽略；UMA 上传已由 `--disable-background-networking` 在网络层关闭）。
 5. **修复 `--load-extension` 多扩展 bug**：该开关是单值开关，重复传多个时 Chromium 只认最后一个 → 多个扩展必须用逗号合并为一个参数值（`--load-extension=a,b`）。此前只有 ScriptCat 单扩展未暴露，加入百度扩展后脚本猫不再加载，已修复并验证。
-6. **端到端验证**（临时目录真实运行 `Course-Thru.exe` 首启全流程）：chrome://policy 9 条策略全部「正常」、默认搜索引擎为百度（扩展控制）、脚本猫 + 百度默认搜索两个扩展均正常加载、所有禁用参数在命令行可见、关闭浏览器后注册表策略自动清空恢复。
+6. **端到端验证**（临时目录真实运行 `Course-Thru.exe` 首启全流程）：chrome://policy 9 条策略全部「正常」、默认搜索引擎为百度（扩展控制）、脚本猫 + 百度默认搜索两个扩展均正常加载、所有禁用参数在命令行可见。该次验证对应早期"退出恢复"版本；定稿改为常驻后验证清单见 `CONSOLE-POLICY-NOTES.md` §4（关闭浏览器后策略仍在、卸载后整键删除）。
 7. **OCS 恢复上游原版并启用自动更新**（2026-08-07）：`extensions/ocs.user.js` 曾在本会话期间被外部改动（删除 OCS 更新模块与更新日志入口，约 135 行，非本会话所为）。现已从 GitHub Release（`ocsjs/ocsjs` 最新 4.15.3）重新拉取并整体替换为未修改的原版脚本：被删除的「📥 更新模块」与更新日志入口已恢复，功能完整保留；同时 `gen-profile.mjs` 预置 OCS 时开启 ScriptCat 自动更新（`checkUpdate: true`，更新源改为有效的 GitHub 最新 Release 资产 URL），`dist\profile_seed` 已重新生成并验证。
 8. **阶段四改动已提交并推送**（2026-08-07 复查确认）：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随提交 `bf66eb6`（关闭谷歌功能并以百度为默认搜索引擎）一并入库并推送 `origin/main`；另有 `61fc0c5`（抑制 CfT 横幅）与 `52efc8b`（交接文档更新）两个提交。本地与远程完全同步，工作区干净。
 
@@ -137,13 +137,13 @@
 
 | 文件 | 职责 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动前写入 9 条 CfT 专用注册表策略并在浏览器退出后自动恢复（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载）；③ 默认扩展列表加入 `extensions/baidu-search`；④ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）；⑤ 新增 `coursethru.log` 滚动日志（2 MB 轮转）与严重错误日志自动打包（`crash-logs\` zip + 自动打开文件夹，见阶段五第 2 条）。 |
+| `main.go` | Go 启动器（GUI 子系统，无控制台）。读取 `config.json` → 首次启动把 `profile_seed/` 复制为 `profile/`（同时清理种子中的会话恢复数据）→ 带参启动 Chromium（`--user-data-dir` + `--load-extension`）。**2026-08-07 修改**：① 启动参数加入一批谷歌功能关闭开关（同步/后台联网/组件更新/崩溃上报/翻译/AI 等，见阶段四第 1 条）；② `applyCftPolicies()` 启动时确保 9 条 CfT 专用注册表策略生效（登录/同步/后台运行/安全浏览/泄露检测/搜索建议/网络预加载；缺失或值不对才写入、退出不删除、卸载由安装器清理）；③ 所有 `reg.exe` 子进程统一加 `CREATE_NO_WINDOW`（`hideConsole`）屏蔽 cmd 黑框；④ 默认扩展列表加入 `extensions/baidu-search`；⑤ 修复多扩展 `--load-extension` 合并（单值开关，逗号连接）；⑥ 新增 `coursethru.log` 滚动日志（2 MB 轮转）与严重错误日志自动打包（`crash-logs\` zip + 自动打开文件夹，见阶段五第 2 条）。 |
 | `go.mod` | Go 模块定义（`coursethru/launcher`，go 1.26）。 |
 | `build.ps1` | 一键构建：下载固定版本组件（直连失败自动回退系统代理）→ 校验/复用公钥（缺失即报错）→ 装配 ScriptCat（注入 key + 欢迎页补丁）→ 复制百度搜索扩展 → 编译启动器 → 生成/复用预置 profile → 写 `config.json`（默认扩展列表含 scriptcat + baidu-search）→ 清理产物残留（7.5 节）→ Inno Setup 打包。参数：`-SkipProfile`、`-NoNsis`。**注意：文件必须保持 UTF-8 BOM（PowerShell 5.1 中文脚本依赖）**。 |
 | `extensions/baidu-search\manifest.json` | **2026-08-07 新增**。百度默认搜索引擎扩展（MV3，`chrome_settings_overrides.search_provider`），未托管机器上唯一可靠的默认搜索设置方式（sensitive 策略会被 Chrome 忽略）。 |
 | `gen-profile.mjs` | CDP 驱动真实 Chromium 生成预置 profile：**直接写入 ScriptCat 存储预置 OCS（默认启用）**，开启开发者模式与 userScripts 开关，关闭→重启→自动验证。信号驱动（DOM 条件等待），无固定 sleep。**2026-08-07**：预置 OCS 时开启 ScriptCat 自动更新（`checkUpdate: true`，更新源为 GitHub 最新 Release 资产 URL）。由 `build.ps1` 调用。 |
 | `extensions/ocs.user.js` | OCS 网课助手脚本（4.15.3，GitHub Release 最新原版、未改动），**随仓库入库**；自带官方「📥 更新模块」，并由 `gen-profile.mjs` 开启 ScriptCat 自动更新检查（双通道自动更新）。构建时复制进产物，由 `gen-profile.mjs` 预置到 ScriptCat 存储并默认启用。 |
-| `installer.iss` | Inno Setup 安装脚本：把 `dist/` 内容装到 `{app}`，创建快捷方式，卸载时调用 `stop-browser.ps1` 并删除应用目录。 |
+| `installer.iss` | Inno Setup 安装脚本：把 `dist/` 内容装到 `{app}`，创建快捷方式，卸载时调用 `stop-browser.ps1`、删除应用目录，并在 `usPostUninstall` 阶段清理本程序写入的 CfT 企业策略（`DeleteCftPolicies`，常驻设计的硬性要求）。 |
 | `stop-browser.ps1` | 卸载辅助：按路径关闭本程序启动的浏览器进程，不影响用户自己的 Chrome。 |
 | `keys\scriptcat.key` | ScriptCat 扩展公钥（736 B，base64）。扩展 ID 由此确定，**缺失时构建直接报错**。 |
 | `config.json.example` | `config.json` 字段参考：`defaultUrl`、`extraArgs`、`appName`、`extensions`。 |
@@ -156,6 +156,7 @@
 |---|---|
 | `README.md` | 使用与构建文档（特性、目录结构、构建命令、常见问题）。已按 Course-Thru（课速通）重写。 |
 | `VERSION.md` | 版本管理方案：`version.txt` 单一来源、完整构建 patch 自动递增、`-Version` 覆盖、远程同步步骤。**2026-08-07 新增**。 |
+| `CONSOLE-POLICY-NOTES.md` | **2026-08-07 新增**。cmd 黑框屏蔽（`CREATE_NO_WINDOW`）与 CfT 企业策略生命周期（常驻 + 卸载清理）的交接说明，代码与设计取舍见该文。 |
 | `AGENTS.md` | 贡献者指南（项目结构、构建/测试命令、代码风格、测试与提交约定、密钥安全）。**本轮新增**。 |
 | `HANDOVER.md` | 本文档。 |
 
@@ -202,7 +203,7 @@ unpacked 扩展的 ID 只由 manifest 里的公钥派生，加载时不校验签
 ### 5. 谷歌功能清理机制（2026-08-07）
 
 1. **能用启动参数就绝不用策略**：同步、后台联网、组件更新、崩溃上报、翻译、AI 等功能都有命令行开关，已写死在 `main.go`（改动组件版本时需复核这些开关在对应源码中仍然存在；不存在的 feature 名会被 Chrome 静默忽略，无副作用）。
-2. **只有注册表策略能做的**（CDP/参数均无法完成）：关浏览器登录入口（`BrowserSignin`）、关同步（`SyncDisabled`）、关后台运行（`BackgroundModeEnabled`）、关安全浏览（`SafeBrowsingProtectionLevel`）等 9 条，写入 `HKCU\Software\Policies\Google\Chrome for Testing`（CfT 专属路径，不影响日常 Chrome），每次启动写入、退出恢复，异常退出残留会在下次正常退出时清理。
+2. **只有注册表策略能做的**（CDP/参数均无法完成）：关浏览器登录入口（`BrowserSignin`）、关同步（`SyncDisabled`）、关后台运行（`BackgroundModeEnabled`）、关安全浏览（`SafeBrowsingProtectionLevel`）等 9 条，写入 `HKCU\Software\Policies\Google\Chrome for Testing`（CfT 专属路径，不影响日常 Chrome）。生命周期为**常驻**：启动时逐条查询、缺失或值不对才写入，退出不删除；卸载时由 installer.iss 整键清理。早期"每次启动写入、退出恢复"版本已废弃（异常退出残留、每次退出多 ~20 次注册表操作，均无必要）。
 3. **sensitive 策略陷阱**：未加入域的机器上 Chrome 会过滤 sensitive 策略（`DefaultSearchProvider*`、`MetricsReportingEnabled`、`SafeBrowsingEnabled` 等），写了也无效——所以默认搜索引擎改用扩展实现，UMA 用启动参数在网络层关闭。
 4. **默认搜索引擎用扩展而非策略**：`chrome_settings_overrides.search_provider` 是官方机制，unpacked 扩展直接生效，且设置页会标注「由扩展控制」，用户无法在设置里改回。
 

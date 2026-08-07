@@ -152,11 +152,10 @@ func main() {
 
 	// 启动浏览器。Chromium 对同一 user-data-dir 的二次启动会自行转发给已运行实例，
 	// 因此这里不需要额外的单实例锁。
-	// 启动前写入 CfT 专用企业策略（关闭谷歌登录/同步、禁用后台运行），浏览器退出后恢复。
-	restorePolicies := applyCftPolicies()
-	if restorePolicies != nil {
-		defer restorePolicies()
-		logf("已写入 CfT 企业策略（浏览器退出时自动恢复）")
+	// 启动前确保 CfT 专用企业策略已写入（关闭谷歌登录/同步、禁用后台运行等）。
+	// 策略常驻注册表、退出不删除，卸载时由安装器统一清理。
+	if applyCftPolicies() {
+		logf("已确保 CfT 企业策略生效（缺失或值不对时写入，退出不删除）")
 	} else {
 		logf("写入 CfT 企业策略失败（不影响主流程）")
 	}
@@ -247,17 +246,21 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
+// hideConsole 让子进程不创建/不显示控制台窗口。
+// GUI 子系统启动器拉起 reg.exe 等控制台程序时，Windows 默认会给子进程分配
+// 新的控制台窗口（一闪而过的 cmd 黑框）；加 CREATE_NO_WINDOW 后子进程
+// 不创建可见控制台，彻底消除弹窗。
+func hideConsole(cmd *exec.Cmd) *exec.Cmd {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+	return cmd
+}
+
 // cftPolicyKey 是 Chrome for Testing 的企业策略注册表路径。CfT 与普通 Chrome 的策略
 // 路径不同（普通 Chrome 为 Software\Policies\Google\Chrome），因此这里写入的策略
 // 只影响本程序的浏览器，不会波及用户日常使用的 Chrome。
 const cftPolicyKey = `HKCU\Software\Policies\Google\Chrome for Testing`
 
-// cftPolicies 启动前写入的用户级策略（REG_DWORD）：
-//
-//	BrowserSignin=0          禁用谷歌账号登录入口
-//	SyncDisabled=1           禁用谷歌同步
-//	BackgroundModeEnabled=0  关闭"关闭浏览器后继续运行后台应用"
-//
+// cftPolicies 启动时确保生效的用户级策略（全部为 REG_DWORD）：
 // 以下均为 CDP 无法完成、只能走注册表策略的动作；全部为非 sensitive 策略，
 // 在未加入域的普通机器上同样生效（sensitive 策略如 DefaultSearchProvider*、
 // MetricsReportingEnabled、SafeBrowsingEnabled 会被 Chrome 直接忽略，故不在此列；
@@ -274,45 +277,24 @@ var cftPolicies = []struct{ name, value string }{
 	{"NetworkPredictionOptions", "2"},             // 关闭网络预加载/预连接（减少后台网络请求）
 }
 
-// applyCftPolicies 在启动浏览器前写入 CfT 企业策略，返回浏览器退出后的恢复函数。
-// 写入失败不阻塞启动（策略是加固项，不应影响主流程）；恢复时先删除本程序写入的值，
-// 再还原用户原有的不同值；原本不存在的策略键会被整体删除。
-func applyCftPolicies() func() {
-	type savedPolicy struct {
-		name    string
-		typeVal string
-	}
-	var saved []savedPolicy
-	keyExisted := false
-	if out, err := exec.Command("reg", "query", cftPolicyKey).CombinedOutput(); err == nil {
-		keyExisted = strings.Contains(string(out), "Chrome for Testing")
-	}
+// applyCftPolicies 确保 CfT 企业策略已写入：逐条查询，缺失或值不对才写入，
+// 已生效的策略跳过。退出时不删除策略；卸载时由 installer.iss 负责清理。
+func applyCftPolicies() bool {
+	ok := true
 	for _, p := range cftPolicies {
 		old := ""
-		if out, err := exec.Command("reg", "query", cftPolicyKey, "/v", p.name).CombinedOutput(); err == nil {
+		if out, err := hideConsole(exec.Command("reg", "query", cftPolicyKey, "/v", p.name)).CombinedOutput(); err == nil {
 			old = parseRegValue(string(out), p.name)
 		}
-		// 旧值与即将写入的值相同（例如上次异常退出留下的残留）时不保存，
-		// 退出时直接删除，避免残留策略无限延续。
-		if old != "" && !regValueEquals(old, p.value) {
-			saved = append(saved, savedPolicy{p.name, old})
+		// 已存在且值正确：跳过写入
+		if old != "" && regValueEquals(old, p.value) {
+			continue
 		}
-		_ = exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f").Run()
-	}
-	return func() {
-		for _, p := range cftPolicies {
-			_ = exec.Command("reg", "delete", cftPolicyKey, "/v", p.name, "/f").Run()
-		}
-		for _, s := range saved {
-			fields := strings.SplitN(s.typeVal, " ", 2)
-			if len(fields) == 2 {
-				_ = exec.Command("reg", "add", cftPolicyKey, "/v", s.name, "/t", fields[0], "/d", fields[1], "/f").Run()
-			}
-		}
-		if !keyExisted {
-			_ = exec.Command("reg", "delete", cftPolicyKey, "/f").Run()
+		if err := hideConsole(exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f")).Run(); err != nil {
+			ok = false
 		}
 	}
+	return ok
 }
 
 // parseRegValue 从 reg query 输出中提取指定策略值的"类型+值"（如 "REG_DWORD 0x1"）。
