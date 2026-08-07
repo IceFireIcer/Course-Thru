@@ -1,13 +1,16 @@
 ; Course-Thru（课速通）安装脚本 (Inno Setup)
-; 编译: ISCC.exe "/DDIST=<dist目录绝对路径>" installer.iss
-; 产出: <项目根>\dist-installer\Course-ThruSetup.exe
+; 编译: ISCC.exe "/DDIST=<dist目录绝对路径>" ["/DMyAppVersion=<x.y.z>"] installer.iss
+; 产出: <项目根>\dist-installer\Course-Thru-<版本>-Setup.exe
+; 版本号由 build.ps1 注入（方案见 VERSION.md），未注入时默认 1.0.0
 
 #ifndef DIST
   #define DIST "dist"
 #endif
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
 
 #define MyAppName "Course-Thru"
-#define MyAppVersion "1.0.0"
 #define MyAppExeName "Course-Thru.exe"
 
 [Setup]
@@ -20,7 +23,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=dist-installer
-OutputBaseFilename=Course-ThruSetup
+OutputBaseFilename=Course-Thru-{#MyAppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -40,6 +43,7 @@ Source: "{#DIST}\extensions\*"; DestDir: "{app}\extensions"; Flags: ignoreversio
 Source: "{#DIST}\profile_seed\*"; DestDir: "{app}\profile_seed"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DIST}\Course-Thru.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DIST}\config.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DIST}\version.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop-browser.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

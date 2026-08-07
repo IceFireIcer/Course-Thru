@@ -79,7 +79,7 @@
 | 产物 | 位置 | 说明 |
 |---|---|---|
 | 便携版 | `Build-Product\portable\`（约 466 MB） | **干净出厂态**（无用户 profile 数据），首次启动自动生成 `profile/` 与 `first_run.flag` |
-| 安装版 | `Build-Product\Course-ThruSetup.exe`（约 150 MB） | Inno Setup 安装包，安装到 `%LOCALAPPDATA%\Course-Thru` |
+| 安装版 | `Build-Product\Course-Thru-<版本>-Setup.exe`（约 150 MB，文件名含版本号） | Inno Setup 安装包，安装到 `%LOCALAPPDATA%\Course-Thru` |
 | 工作输出 | `dist/`（约 466 MB）、`dist-installer/` | `build.ps1` 的标准输出目录，内容与 Build-Product 一致 |
 
 ### 组件版本（build.ps1 顶部固定，保证可复现）
@@ -134,6 +134,7 @@
 | `stop-browser.ps1` | 卸载辅助：按路径关闭本程序启动的浏览器进程，不影响用户自己的 Chrome。 |
 | `keys\scriptcat.key` | ScriptCat 扩展公钥（736 B，base64）。扩展 ID 由此确定，**缺失时构建直接报错**。 |
 | `config.json.example` | `config.json` 字段参考：`defaultUrl`、`extraArgs`、`appName`、`extensions`。 |
+| `version.txt` | 应用版本单一来源（`x.y.z`），完整构建自动 patch +1 并写回；构建时注入安装包与 `dist\version.txt`。**2026-08-07 新增**，方案见 `VERSION.md`。 |
 | `.gitignore` | 忽略规则。**本轮修改**：新增 `/Build-Product/`。 |
 
 ### 文档
@@ -141,6 +142,7 @@
 | 文件 | 职责 |
 |---|---|
 | `README.md` | 使用与构建文档（特性、目录结构、构建命令、常见问题）。已按 Course-Thru（课速通）重写。 |
+| `VERSION.md` | 版本管理方案：`version.txt` 单一来源、完整构建 patch 自动递增、`-Version` 覆盖、远程同步步骤。**2026-08-07 新增**。 |
 | `AGENTS.md` | 贡献者指南（项目结构、构建/测试命令、代码风格、测试与提交约定、密钥安全）。**本轮新增**。 |
 | `HANDOVER.md` | 本文档。 |
 
@@ -149,8 +151,8 @@
 | 目录/文件 | 职责 |
 |---|---|
 | `dist/` | 便携版构建输出（chrome、extensions、profile_seed、Course-Thru.exe、config.json）。 |
-| `dist-installer/` | 安装版输出（Course-ThruSetup.exe）。 |
-| `Build-Product/` | 交付汇总：`portable/`（便携版完整目录）+ `Course-ThruSetup.exe`（安装版）。 |
+| `dist-installer/` | 安装版输出（`Course-Thru-<版本>-Setup.exe`，版本号由构建自动注入）。 |
+| `Build-Product/` | 交付汇总：`portable/`（便携版完整目录）+ `Course-Thru-<版本>-Setup.exe`（安装版）。 |
 | `.tools/` | 构建缓存：下载的 Chromium/Go/Inno Setup 压缩包与解压目录（约 537 MB）。 |
 | `.agents/`、`.claude/`、`skills-lock.json` | 环境自动生成的技能库/配置，不属于本项目代码（gitignore 已注明）。 |
 | `keys\scriptcat_private.pem` | 私钥备份（gitignore），勿删勿传。 |
@@ -210,7 +212,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -SkipProfile
 
 ```powershell
 Copy-Item -Path 'dist\*' -Destination 'Build-Product\portable' -Recurse -Force
-Copy-Item -LiteralPath 'dist-installer\Course-ThruSetup.exe' -Destination 'Build-Product\Course-ThruSetup.exe' -Force
+Copy-Item -Path 'dist-installer\Course-Thru-*-Setup.exe' -Destination 'Build-Product' -Force
 ```
 
 验证要点：首次启动生成 `profile/` 与 `first_run.flag`，且**只打开 1 个 `about:blank`**（无多余会话窗口）；任何启动都不出现 `docs.scriptcat.org` 相关页面（install_comple / changelog / open-dev）；扩展 ID 保持 `hodgdaljmnbiliahlpcjcpiphnkbmfff`。
@@ -222,6 +224,7 @@ Copy-Item -LiteralPath 'dist-installer\Course-ThruSetup.exe' -Destination 'Build
 | 事项 | 状态 | 说明 |
 |---|---|---|
 | 阶段四改动提交 | ✅ 已完成 | 2026-08-07：`main.go`、`build.ps1` 修改 + `extensions/baidu-search/` 新增 + `extensions/ocs.user.js` 外部修改，已随 `bf66eb6` 一并提交并推送，本地与远程同步 |
+| 版本号自动递增 | ✅ 已完成 | `version.txt` 单一来源；完整构建 patch 自动 +1、`-NoNsis` 复用、`-Version` 覆盖；安装包文件名与 AppVersion 带版本；方案见 `VERSION.md` |
 | OCS 外部维护 | 📋 已知 | 用户在其他对话窗口改 `extensions/ocs.user.js` 内容（不改名）；若内容里升了 `@version`，需同步更新 `build.ps1` 顶部 `$OcsTag`（不更新只是构建警告，不阻塞） |
 | `.claude/` 清理中断 | ⚠️ 待处理 | `find-skills` 访问被拒，技能内容大部分已删、剩空壳目录；用户已暂停清理，需决定恢复或彻底删除 |
 | `.tools/`、`.agents/`、`skills-lock.json` 是否清除 | ⚠️ 待用户决定 | 清理已叫停；`.tools` 为可重建缓存，`.agents`/`skills-lock.json` 由环境管理 |

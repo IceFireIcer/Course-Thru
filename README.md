@@ -16,7 +16,7 @@
 
 ### 方式一：安装版（推荐给最终用户）
 
-运行 `Course-ThruSetup.exe`，安装完成后双击桌面快捷方式（或开始菜单 `Course-Thru`）即可。
+运行安装包（`Course-Thru-<版本>-Setup.exe`，文件名含版本号），安装完成后双击桌面快捷方式（或开始菜单 `Course-Thru`）即可。
 
 打开支持的网课平台（如超星学习通 `chaoxing.com`），进入课程页面后 OCS 网课助手会自动运行。
 
@@ -67,7 +67,7 @@ dist/                           # 便携发布目录（构建产物）
 └── profile/                    # 运行时 profile（首次启动由启动器从 profile_seed 复制）
 .tools/                         # 构建缓存（下载的组件）
 dist-installer/                 # 安装包输出目录
-Build-Product/                  # 交付汇总（portable/ 便携版 + Course-ThruSetup.exe 安装版）
+Build-Product/                  # 交付汇总（portable/ 便携版 + Course-Thru-<版本>-Setup.exe 安装版）
 ```
 
 ## 从源码构建
@@ -83,6 +83,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - 组件版本固定（Chromium 152、ScriptCat v1.4.0、OCS 4.15.3），保证可复现；OCS 脚本本地维护（`extensions/ocs.user.js`），不依赖 GitHub 下载
 - `-SkipProfile` 跳过预置 profile 生成（复用已有 `dist\profile_seed`）
 - `-NoNsis` 跳过安装包（只产出便携 `dist`）
+- `-Version x.y.z` 手动指定构建版本（默认完整构建 patch 自动 +1，版本方案见 `VERSION.md`）
 
 ## 技术说明
 

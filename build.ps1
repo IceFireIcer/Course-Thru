@@ -1,9 +1,10 @@
 ﻿# build.ps1 — Course-Thru（课速通）一键构建脚本（Windows）
 # 流程：下载组件(Chromium/ScriptCat/OCS) → 注入固定 key → 编译启动器 → 生成预置 profile → 组装 dist 发布目录
-# 用法: powershell -ExecutionPolicy Bypass -File build.ps1 [-SkipProfile] [-NoNsis]
+# 用法: powershell -ExecutionPolicy Bypass -File build.ps1 [-SkipProfile] [-NoNsis] [-Version x.y.z]
 param(
     [switch]$SkipProfile,  # 跳过 profile 生成（复用已有 dist\profile_seed）
-    [switch]$NoNsis        # 跳过 NSIS 安装包
+    [switch]$NoNsis,       # 跳过安装包（只产出便携版 dist，不递增版本号）
+    [string]$Version       # 手动指定本次构建版本（如 1.1.0），完整构建时写回 version.txt
 )
 $ErrorActionPreference = "Stop"
 
@@ -25,6 +26,33 @@ $ScriptCatUrl  = "https://github.com/scriptscat/scriptcat/releases/download/$Scr
 function Info($m)   { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m)   { Write-Host "[build] 警告: $m" -ForegroundColor Yellow }
 function Fail($m)   { Write-Host "[build] 错误: $m" -ForegroundColor Red; exit 1 }
+
+# ------- 应用版本（单一来源 version.txt，完整方案见 VERSION.md） -------
+# 版本格式 x.y.z。默认完整构建（产出安装包）patch 自动 +1 并写回 version.txt；
+# -NoNsis 便携调试构建复用当前版本、不递增不写回；-Version 手动覆盖（里程碑版本用）。
+$VersionFile = Join-Path $Root "version.txt"
+$AppVersion  = "1.0.0"
+if (Test-Path -LiteralPath $VersionFile) {
+    $v = (Get-Content -LiteralPath $VersionFile -Raw -ErrorAction SilentlyContinue).Trim()
+    if ($v -match '^\d+\.\d+\.\d+$') { $AppVersion = $v }
+    else { Warn "version.txt 内容不合法（应为 x.y.z）: '$v'，使用默认 1.0.0" }
+}
+if ($Version) {
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "参数 -Version 格式应为 x.y.z，收到: $Version" }
+    $AppVersion = $Version
+    $versionWhy = "手动指定 -Version"
+} elseif ($NoNsis) {
+    $versionWhy = "-NoNsis 便携调试，复用版本号"
+} else {
+    $vp = $AppVersion.Split('.')
+    $vp[2] = [string]([int]$vp[2] + 1)
+    $AppVersion = $vp -join '.'
+    $versionWhy = "完整构建自动递增"
+}
+if (-not $NoNsis) {
+    [IO.File]::WriteAllText($VersionFile, $AppVersion, [System.Text.UTF8Encoding]::new($false))
+}
+Info "应用版本: $AppVersion（$versionWhy）"
 
 # 读取系统代理（curl.exe 不读 WinINET 设置，需要显式传入）
 function Get-SystemProxy {
@@ -230,6 +258,8 @@ $config = @{
     extensions = @("extensions/scriptcat", "extensions/baidu-search")
 } | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Dist "config.json"), $config)
+# 产物内版本文件（为将来 UI 显示版本 / 自动更新比较预留）
+[IO.File]::WriteAllText((Join-Path $Dist "version.txt"), "$AppVersion`r`n", [System.Text.UTF8Encoding]::new($false))
 
 # ============ 7.5 清理产物内残留（不应进入安装包） ============
 # 开发期 gen-profile 曾把临时 profile 写到 dist\chrome\.tools\profile-tmp，
@@ -260,13 +290,14 @@ if (-not $NoNsis) {
         Download "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl" $zhLang
     }
     if (Test-Path $iscc) {
-        Info "编译 Inno Setup 安装程序..."
-        & $iscc "/DDIST=$Dist" (Join-Path $Root "installer.iss")
+        Info "编译 Inno Setup 安装程序（版本 $AppVersion）..."
+        & $iscc "/DDIST=$Dist" "/DMyAppVersion=$AppVersion" (Join-Path $Root "installer.iss")
         if ($LASTEXITCODE -ne 0) { Warn "安装包编译失败" }
     } else {
         Warn "Inno Setup 不可用，跳过安装包。dist 目录已可手动使用。"
     }
 }
 
-Info "构建完成！发布目录: $Dist"
+Info "构建完成！发布目录: $Dist（版本 $AppVersion）"
+if (-not $NoNsis) { Info "安装包: $(Join-Path $Root "dist-installer\Course-Thru-$AppVersion-Setup.exe")" }
 Info "启动方式: 双击 $Dist\Course-Thru.exe"
