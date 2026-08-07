@@ -1,4 +1,5 @@
-"""把 .pak 资源里的 “Chrome for Testing” 品牌字样替换为 “Course-Thru 课速通”。
+"""把 .pak 资源里的 “Chrome for Testing” 品牌字样替换为 “Course-Thru 课速通”，
+并把关于页版权署名里的 “Google LLC.” 替换为 “IceFire_Icer.”。
 
 构建期脚本，由 build.ps1 在 Chromium 解压后调用。Chrome for Testing 的
 品牌字符串（窗口标题模板、新标签页“自定义”按钮、设置“关于”页等）编译在
@@ -17,6 +18,9 @@ from pathlib import Path
 REPLACEMENTS = [
     ("Google Chrome for Testing", "Course-Thru \u8bfe\u901f\u901a"),
     ("Chrome for Testing", "Course-Thru"),
+    # 关于页版权署名：只替换带句点的完整公司名并保留句点，
+    # 避免误伤其他声明里的裸 “Google LLC”。
+    ("Google LLC.", "IceFire_Icer."),
 ]
 
 

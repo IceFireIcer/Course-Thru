@@ -101,6 +101,8 @@ func main() {
 		fmt.Sprintf("--user-data-dir=%s", profileDir),
 		"--no-first-run",
 		"--no-default-browser-check",
+		// 每次启动都以最大化窗口打开（写死，不受首次运行限制约束）。
+		"--start-maximized",
 		// 抑制 Chrome for Testing 的"仅用于自动化测试"横幅（--disable-infobars 对 CfT 有效）
 		"--disable-infobars",
 		// 关闭涉及谷歌的功能：本程序面向国内网课场景，不需要谷歌账号与云端服务。

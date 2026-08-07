@@ -172,6 +172,27 @@ Info "替换品牌字符串（Chrome for Testing -> Course-Thru）..."
 & python $brandScript $pakFiles
 if ($LASTEXITCODE -ne 0) { Fail "品牌字符串替换失败" }
 
+# ============ 3.55 关于页版权署名替换（构建期）============
+# Chromium 自带的 ABOUT 文件固定写着 "Copyright 2026 Google LLC"，全新解压后
+# 会恢复原文，因此在这里幂等替换为自有署名；已替换过的产物保持不变。
+$aboutFile = Join-Path $distChrome "ABOUT"
+$aboutFrom = "Copyright 2026 Google LLC. All rights reserved."
+$aboutTo   = "Copyright 2026 IceFire_Icer. All rights reserved."
+if (Test-Path $aboutFile) {
+    $aboutText = [System.IO.File]::ReadAllText($aboutFile, [System.Text.Encoding]::ASCII)
+    if ($aboutText.Contains($aboutFrom)) {
+        $aboutText = $aboutText.Replace($aboutFrom, $aboutTo)
+        [System.IO.File]::WriteAllText($aboutFile, $aboutText, [System.Text.Encoding]::ASCII)
+        Info "已替换关于页版权署名（Google LLC -> IceFire_Icer）"
+    } elseif ($aboutText.Contains($aboutTo)) {
+        Info "关于页版权署名已替换（复用已有 dist\chrome，无需重复）"
+    } else {
+        Warn "ABOUT 中未找到 '$aboutFrom'，请检查 Chromium 版本是否更新了版权文案"
+    }
+} else {
+    Warn "未找到 $aboutFile，跳过关于页版权署名替换"
+}
+
 # ============ 3.6 品牌 logo 图片资源替换（构建期）============
 # 用 logo\logo.png 生成全套图标资产到 assets\（app.ico / 安装向导图 /
 # pak 内嵌 PNG / ScriptCat 扩展图标），再把 Chromium 三个 pak 里的
