@@ -71,6 +71,7 @@ keys/scriptcat.key              # 扩展固定 key（勿删，删除会改变扩
 extensions/ocs.user.js          # OCS 网课助手脚本（本地维护，构建时打包进产物）
 extensions/baidu-search/        # 百度内置扩展（默认搜索引擎 + 新标签页直达百度）
 course-thru/                    # 内置主页（index.html + fonts/js/logo，全部相对路径，随程序分发）
+third-party-licenses/           # 第三方开源许可证原文（OCS=MIT、ScriptCat=GPL v3，合规署名）
 config.json.example             # 配置示例（默认页接口）
 
 dist/                           # 便携发布目录（构建产物）
@@ -85,7 +86,6 @@ dist/                           # 便携发布目录（构建产物）
 └── profile/                    # 运行时 profile（首次启动由启动器从 profile_seed 复制）
 .tools/                         # 构建缓存（下载的组件）
 dist-installer/                 # 安装包输出目录（Course-Thru-<版本>-Setup.exe）
-Build-Product/                  # 交付汇总（portable/ 便携版 + Course-Thru-<版本>-Setup.exe 安装版）
 ```
 
 ## 从源码构建
@@ -99,6 +99,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 - 首次构建会下载 Chromium（约 160MB）与 Go SDK，后续构建自动复用 `.tools` 缓存
 - 组件版本固定（Chromium 152、ScriptCat v1.4.0、OCS 4.15.3），保证可复现；OCS 脚本本地维护（`extensions/ocs.user.js`），不依赖 GitHub 下载
+- 所依赖的开源组件许可证原文收录在 `third-party-licenses/`（OCS=MIT、ScriptCat=GPL v3），随仓库合规分发
 - `-SkipProfile` 跳过预置 profile 生成（复用已有 `dist\profile_seed`）
 - `-NoNsis` 跳过安装包（只产出便携 `dist`）
 - `-Version x.y.z` 手动指定构建版本（默认完整构建 patch 自动 +1，`-NoNsis` 复用当前版本）
@@ -138,3 +139,11 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 **Q：卸载后想保留账号/脚本数据？**
 卸载会删除 `%LOCALAPPDATA%\Course-Thru\` 全部数据。如需保留，卸载前复制该目录备份。
+
+## 许可证
+
+本项目以 **Apache-2.0** 开源（见仓库根目录 `LICENSE`）。
+
+随程序分发的第三方开源组件许可原文收录在 `third-party-licenses/`：
+- **OCS 网课助手**：MIT，Copyright (c) 2022 enncy（`ocsjs-LICENSE.txt`）
+- **ScriptCat（脚本猫）**：**GPL v3**，作者 CodFrm（`scriptcat-LICENSE.txt`）——以浏览器扩展形式分发时需遵守 GPL v3 条款
