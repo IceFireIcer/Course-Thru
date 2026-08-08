@@ -28,7 +28,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 - ScriptCat 图标加载 OCS 无报错、开发者模式已开启、userScripts 开关已持久化；
 - 任何启动都不出现 `docs.scriptcat.org` 页面（install_comple / changelog / open-dev）；
 - 首启后 `dist\first_run.flag` 出现；
-- 默认搜索为百度（设置页标注「由扩展控制」）、新标签页直达百度且无任何确认弹窗。
+- 默认搜索为百度（设置页标注「由扩展控制」）、新标签页直达百度且无任何确认弹窗；
+- **会话不恢复**：打开多个标签页后关闭浏览器再启动，只打开默认页（启动参数含 `--disable-session-crashed-bubble`、无 restore 开关，且启动器每次清理 `Default/Sessions*`）。
 改过 `gen-profile.mjs` 时必须删掉 `dist\profile_seed` 重新生成并端到端验证。
 
 ### 版本与组件（固定，保证可复现）
@@ -41,7 +42,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 
 | 组件 | 作用 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）并清 `Default/Sessions*`；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
+| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）；**每次启动清 `Default/Sessions*` 关闭会话恢复**；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能，含 `--disable-session-crashed-bubble` 禁崩溃恢复气泡）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
 | `build.ps1` | 构建流水线（步骤有编号注释）。幂等下载（直连失败自动回退系统代理）、语言裁剪、注入 key、调用各 patch 脚本 |
 | `gen-profile.mjs` | CDP 驱动真实 Chromium 生成 `profile_seed`：开开发者模式 + userScripts 开关，把 OCS 直接写入 ScriptCat 的 `chrome.storage.local`（status=1 默认启用），重启后验证。**信号驱动**（DOM 条件等待 + MutationObserver），不固定 sleep |
 | `patch-branding.py` | 构建期替换 `locales\*.pak` / `resources.pak` 里的 "Chrome for Testing" 品牌字样与 Google LLC 版权（幂等） |
@@ -84,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 
 ## 本地文档（gitignore 不入库，排查/扩展时必读）
 
-HANDOVER.md（完整交接：阶段回顾、机制详解、待办）、VERSION.md（版本递增规则）、OPEN-VERSION-GUIDE.md（扩展接管静默、新标签页直达百度方案）、BRANDING-PATCH.md（品牌字样替换+语言包裁剪）、LOGO-REPLACEMENT.md（logo 全链路替换+验证清单）、CONSOLE-POLICY-NOTES.md（cmd 黑框屏蔽+CfT 策略生命周期）均为**本地维护、不入库**，改完不必推送。仓库入库文档只有 README.md、AGENTS.md，另含 LICENSE（Apache-2.0）与 `third-party-licenses/`（第三方许可证原文）。
+HANDOVER.md（完整交接：阶段回顾、机制详解、待办）、VERSION.md（版本递增规则）、OPEN-VERSION-GUIDE.md（扩展接管静默、新标签页直达百度方案）、BRANDING-PATCH.md（品牌字样替换+语言包裁剪）、LOGO-REPLACEMENT.md（logo 全链路替换+验证清单）、CONSOLE-POLICY-NOTES.md（cmd 黑框屏蔽+CfT 策略生命周期）均为**本地维护、不入库**，改完不必推送。仓库入库文档只有 README.md、AGENTS.md，另含 LICENSE（GPL v3）与 `third-party-licenses/`（第三方许可证原文）。
 
 ## 约定
 

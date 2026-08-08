@@ -14,6 +14,7 @@
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
 - 🏠 **内置主页**：`course-thru/` 本地主页随程序分发，启动即打开（`file://` 自包含，离线可用）；可在 `config.json` 里换成任意网址
 - 🆕 **新标签页直达百度**：点「+」/ Ctrl+T 直接打开百度，全程无确认弹窗；从链接新开的标签页不受影响
+- 🚪 **每次启动全新开始**：关闭会话恢复——每次启动前自动清理会话数据，上次的标签页不会恢复，异常退出也不弹「恢复页面？」气泡，始终从默认页打开
 - 🛡️ **默认关闭谷歌功能**：同步、后台联网、组件更新、崩溃上报、翻译与 AI 功能均通过启动参数禁用；另有 9 条 CfT 专用注册表策略关闭登录/后台运行/安全浏览上报等，**只影响本程序，不影响用户日常 Chrome**
 - 🔍 **默认搜索引擎为百度**：通过内置扩展设置，设置页标注「由扩展控制」
 - 🧯 **错误日志自动打包**：程序遇到严重错误无法启动时，自动把日志打包为 zip 存到 `crash-logs\` 并打开文件夹，方便微信回传排查
@@ -142,8 +143,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ## 许可证
 
-本项目以 **Apache-2.0** 开源（见仓库根目录 `LICENSE`）。
+本项目以 **GPL v3**（GNU General Public License v3）开源（见仓库根目录 `LICENSE`）。
 
 随程序分发的第三方开源组件许可原文收录在 `third-party-licenses/`：
 - **OCS 网课助手**：MIT，Copyright (c) 2022 enncy（`ocsjs-LICENSE.txt`）
-- **ScriptCat（脚本猫）**：**GPL v3**，作者 CodFrm（`scriptcat-LICENSE.txt`）——以浏览器扩展形式分发时需遵守 GPL v3 条款
+- **ScriptCat（脚本猫）**：**GPL v3**，作者 CodFrm（`scriptcat-LICENSE.txt`）——与本项目同为 GPL v3，许可证完全兼容
