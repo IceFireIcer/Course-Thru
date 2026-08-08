@@ -431,7 +431,10 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer out.Close()
-	if _, err := io.Copy(out, in); err != nil {
+	// 用 1MB 缓冲替代 io.Copy 默认的 32KB：profile_seed 里 4 个大文件占 ~10MB，
+	// 大缓冲显著减少 read/write 系统调用次数（32KB 需要 ~320 次，1MB 仅 ~10 次）。
+	// 每个 copyFile 调用创建自己的 buffer，并发 worker 之间无共享、无数据竞争。
+	if _, err := io.CopyBuffer(out, in, make([]byte, 1<<20)); err != nil {
 		return err
 	}
 	return nil
@@ -477,26 +480,46 @@ func applyCftPolicies() bool {
 	out, err := hideConsole(exec.Command("reg", "query", cftPolicyKey)).CombinedOutput()
 	// 键不存在（查询失败）：整键写入全部策略。
 	if err != nil {
-		ok := true
-		for _, p := range cftPolicies {
-			if err := hideConsole(exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f")).Run(); err != nil {
-				ok = false
-			}
-		}
-		return ok
+		return addCftPoliciesParallel(cftPolicies)
 	}
 	// 键存在：从整键输出中逐条提取已有值，缺失或值不对才补写（兼容未来新增策略）。
-	ok := true
+	var need []struct{ name, value string }
 	for _, p := range cftPolicies {
 		old := parseRegValue(string(out), p.name)
 		if old != "" && regValueEquals(old, p.value) {
 			continue
 		}
-		if err := hideConsole(exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f")).Run(); err != nil {
-			ok = false
+		need = append(need, p)
+	}
+	if len(need) == 0 {
+		return true
+	}
+	return addCftPoliciesParallel(need)
+}
+
+// addCftPoliciesParallel 并行写入多条 CfT 策略。每条策略写入注册表键下各自独立的
+// 值（互不覆盖），Windows 注册表对不同值名的并发写没有冲突，可安全并行；把首启
+// 时 9 次串行 reg add（每次 spawn reg.exe 约 10-50ms）压缩到约一次往返的开销。
+// 返回全部成功与否。
+func addCftPoliciesParallel(policies []struct{ name, value string }) bool {
+	var wg sync.WaitGroup
+	results := make(chan bool, len(policies))
+	for _, p := range policies {
+		wg.Add(1)
+		go func(p struct{ name, value string }) {
+			defer wg.Done()
+			err := hideConsole(exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f")).Run()
+			results <- err == nil
+		}(p)
+	}
+	wg.Wait()
+	close(results)
+	for ok := range results {
+		if !ok {
+			return false
 		}
 	}
-	return ok
+	return true
 }
 
 // parseRegValue 从 reg query 输出中提取指定策略值的"类型+值"（如 "REG_DWORD 0x1"）。
