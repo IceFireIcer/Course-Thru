@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -181,10 +182,13 @@ func main() {
 	}
 	logf("已启动 Chromium（PID %d，首次运行: %v）", cmd.Process.Pid, firstRun)
 	if firstRun {
-		// 首次启动：自动关闭 ScriptCat 的安装成功欢迎页，并写入首次运行标记。
-		closeScriptCatWelcome(profileDir)
+		// 首次运行标记只决定"下次是否再开调试端口"，与欢迎页清理结果无关，立即写入。
 		_ = os.WriteFile(markerFile, []byte("Course-Thru first run completed: "+time.Now().Format("2006-01-02 15:04:05")+"\n"), 0644)
 		logf("首次运行完成，已写入 first_run.flag")
+		// 欢迎页清理是纯兜底（构建期已在扩展源码屏蔽该逻辑），放后台 goroutine：
+		// 浏览器可能很快退出，同步等待会白白阻塞启动器最长约 20 秒（8 秒等端口 +
+		// 12 秒轮询），且清理失败无副作用。goroutine 随进程退出自然终止。
+		go closeScriptCatWelcome(profileDir)
 	}
 	// 保持启动器存活直到浏览器退出（GUI 子系统下不产生可见控制台）。
 	_ = cmd.Wait()
@@ -221,7 +225,23 @@ func loadConfig(exeDir string) Config {
 	if v, ok := raw["extensions"]; ok {
 		_ = json.Unmarshal(v, &cfg.Extensions)
 	}
+	// scriptcat 是预置 OCS 脚本数据的载体扩展：移除它会导致首启丢失全部预置
+	// 脚本（profile_seed 中的 OCS 数据按该扩展 ID 存储）。因此即使用户在
+	// config.json 里自定义了扩展列表，也强制保留 scriptcat（幂等去重）。
+	if !contains(cfg.Extensions, "extensions/scriptcat") {
+		cfg.Extensions = append(cfg.Extensions, "extensions/scriptcat")
+	}
 	return cfg
+}
+
+// contains 判断字符串切片是否包含指定元素。
+func contains(list []string, s string) bool {
+	for _, e := range list {
+		if e == s {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveStartURL 决定启动时打开的第一个地址：
@@ -262,8 +282,12 @@ const silentOverrideTimestamp = int64(15715382400000000)
 //     Chrome 启动校验只清理"扩展已不存在"的记录，不会清理"扩展还在但已不再
 //     声明接管"的残留；当前内置扩展都不再声明接管，整字段删除是安全的。
 //  2. 把 extensions.simple_override_begin_confirmation_timestamp 预置为未来
-//     时间戳（缺失或小于目标值时写入）。Chrome 可能把该值改写为科学计数法
-//     （如 1.57153824e+16），读取比较时用 float64 兼容。
+//     时间戳（缺失或小于目标值时写入）。
+//
+// 解析用 json.Decoder + UseNumber（而非默认 float64）：Preferences 里除本字段外
+// 还可能有其他超大整数（如各种时间戳、随机种子），默认解析会把它们全部变成
+// float64 并在写回时丢精度/改写为科学计数法。UseNumber 让数字以原始文本
+// json.Number 保留，写回时逐字节原样输出，不动无关字段的精度。
 //
 // 返回 false 表示文件缺失/解析失败等（正常跳过，不阻塞主流程）。
 func ensureBaiduQuiet(profileDir string) bool {
@@ -273,7 +297,9 @@ func ensureBaiduQuiet(profileDir string) bool {
 		return false
 	}
 	var root map[string]interface{}
-	if json.Unmarshal(data, &root) != nil {
+	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec.UseNumber()
+	if dec.Decode(&root) != nil {
 		return false
 	}
 	ext, _ := root["extensions"].(map[string]interface{})
@@ -286,9 +312,12 @@ func ensureBaiduQuiet(profileDir string) bool {
 		delete(ext, "chrome_url_overrides")
 		changed = true
 	}
-	if cur, ok := ext["simple_override_begin_confirmation_timestamp"].(float64); !ok ||
-		cur < float64(silentOverrideTimestamp) {
-		ext["simple_override_begin_confirmation_timestamp"] = silentOverrideTimestamp
+	// Chrome 可能把该字段改写为科学计数法（如 1.57153824e+16）或保留为整数；
+	// 统一经 json.Number.String() 取原文后再比较数值大小。
+	if cur, ok := ext["simple_override_begin_confirmation_timestamp"].(json.Number); !ok ||
+		lessThan(cur, silentOverrideTimestamp) {
+		// 以 json.Number 写入整数原文，避免 Marshal 时被写成科学计数法。
+		ext["simple_override_begin_confirmation_timestamp"] = json.Number(strconv.FormatInt(silentOverrideTimestamp, 10))
 		changed = true
 	}
 	if !changed {
@@ -310,9 +339,28 @@ func ensureBaiduQuiet(profileDir string) bool {
 	return true
 }
 
+// lessThan 判断 json.Number 表示的数值是否小于 threshold（int64）。
+// json.Number 是字符串，可能为整数原文或科学计数法，统一按 float64 比较。
+func lessThan(num json.Number, threshold int64) bool {
+	f, err := num.Float64()
+	if err != nil {
+		return true
+	}
+	return f < float64(threshold)
+}
+
 // copyDir 递归复制目录内容。
+// profile_seed 约 200 个文件 / 14MB：4 个大文件占 ~10MB，其余是海量小文件
+// （LevelDB 分段），单线程顺序复制在机械硬盘上小文件寻道开销大、首启出窗慢。
+// 这里分两遍处理：第一遍同步遍历建目录（保证后续并发写文件时父目录已存在），
+// 第二遍用固定 worker 池并发复制文件。任一文件失败即停止派发并返回首个错误，
+// 与旧的顺序实现在"复制失败走 fatal"的行为上等价。
 func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+	// 第一遍：遍历收集待复制文件（记录源路径 + 相对路径）+ 同步建目录。
+	// 相对路径在第一遍就用 filepath.Rel 计算好并随任务携带：worker 直接复用，
+	// 不在并发循环里二次调用 Rel（避免重复计算，也避免不同环境下的路径规范化差异）。
+	var files []struct{ src, rel string }
+	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -320,12 +368,56 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dst, rel)
 		if info.IsDir() {
-			return os.MkdirAll(target, 0755)
+			return os.MkdirAll(filepath.Join(dst, rel), 0755)
 		}
-		return copyFile(path, target)
+		files = append(files, struct{ src, rel string }{path, rel})
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	const workers = 8
+	jobs := make(chan struct{ src, rel string }, len(files)) // 缓冲容量=任务总数，发送永不阻塞
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		first error
+	)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				if err := copyFile(job.src, filepath.Join(dst, job.rel)); err != nil {
+					mu.Lock()
+					if first == nil {
+						first = err
+					}
+					mu.Unlock()
+					return
+				}
+			}
+		}()
+	}
+
+	// 第二遍：派发任务。发送/关闭都在独立 goroutine；有 worker 报错后不再派发。
+	go func() {
+		defer close(jobs)
+		for _, job := range files {
+			mu.Lock()
+			stopped := first != nil
+			mu.Unlock()
+			if stopped {
+				return
+			}
+			jobs <- job
+		}
+	}()
+
+	wg.Wait()
+	return first
 }
 
 func copyFile(src, dst string) error {
@@ -376,16 +468,27 @@ var cftPolicies = []struct{ name, value string }{
 	{"NetworkPredictionOptions", "2"},             // 关闭网络预加载/预连接（减少后台网络请求）
 }
 
-// applyCftPolicies 确保 CfT 企业策略已写入：逐条查询，缺失或值不对才写入，
-// 已生效的策略跳过。退出时不删除策略；卸载时由 installer.iss 负责清理。
+// applyCftPolicies 确保 CfT 企业策略已写入。每次 reg.exe 子进程都是一次完整的
+// spawn 往返（约 10-50ms），因此先整键查询一次（reg query 不带 /v 会列出该键下
+// 全部值），而不是逐条 query。整键输出与单值输出格式一致，parseRegValue 可复用。
+// 键已存在时逐条比对已有值，缺失或值不对才补写；键不存在时整键写入全部策略。
+// 策略常驻注册表、退出不删除；卸载时由 installer.iss 负责清理。
 func applyCftPolicies() bool {
+	out, err := hideConsole(exec.Command("reg", "query", cftPolicyKey)).CombinedOutput()
+	// 键不存在（查询失败）：整键写入全部策略。
+	if err != nil {
+		ok := true
+		for _, p := range cftPolicies {
+			if err := hideConsole(exec.Command("reg", "add", cftPolicyKey, "/v", p.name, "/t", "REG_DWORD", "/d", p.value, "/f")).Run(); err != nil {
+				ok = false
+			}
+		}
+		return ok
+	}
+	// 键存在：从整键输出中逐条提取已有值，缺失或值不对才补写（兼容未来新增策略）。
 	ok := true
 	for _, p := range cftPolicies {
-		old := ""
-		if out, err := hideConsole(exec.Command("reg", "query", cftPolicyKey, "/v", p.name)).CombinedOutput(); err == nil {
-			old = parseRegValue(string(out), p.name)
-		}
-		// 已存在且值正确：跳过写入
+		old := parseRegValue(string(out), p.name)
 		if old != "" && regValueEquals(old, p.value) {
 			continue
 		}
@@ -409,18 +512,24 @@ func parseRegValue(out, name string) string {
 	return fields[0] + " " + fields[1]
 }
 
-// regValueEquals 比较 reg 查询出的值（如 "REG_DWORD 0x0"）与目标字符串（如 "0"）是否等价。
+// regValueEquals 比较 reg 查询出的值（如 "REG_DWORD 0x0"）与目标值 target 是否等价。
+// reg.exe 输出的 REG_DWORD 值固定为十六进制（如 0x0、0x10），cftPolicies 里的
+// target 是十进制字符串（如 "0"、"2"）。统一解析为无符号整数再比较，避免十六进制
+// 字符串直接比较造成的误判（例如 0x10 会与 "10" 混淆）。
 func regValueEquals(typeVal, target string) bool {
 	fields := strings.Fields(typeVal)
 	if len(fields) < 2 {
 		return false
 	}
-	v := strings.ReplaceAll(fields[1], "0x", "")
-	v = strings.TrimLeft(v, "0")
-	if v == "" {
-		v = "0"
+	got, err := strconv.ParseUint(strings.TrimPrefix(fields[1], "0x"), 16, 32)
+	if err != nil {
+		return false
 	}
-	return v == target
+	want, err := strconv.ParseUint(target, 10, 32)
+	if err != nil {
+		return false
+	}
+	return got == want
 }
 
 // closeScriptCatWelcome 通过 CDP HTTP 接口关闭 ScriptCat 的"安装成功"欢迎页。
