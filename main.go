@@ -85,12 +85,16 @@ func main() {
 				return
 			}
 			logf("已从 profile_seed 复制初始用户数据")
-			// 种子不应携带生成流程的会话恢复数据；
-			// 删除后首次启动只打开默认页，不会恢复出生成时的窗口。
-			for _, d := range []string{"Sessions", "Sessions_Encrypted"} {
-				_ = os.RemoveAll(filepath.Join(profileDir, "Default", d))
-			}
 		}
+	}
+
+	// 每次启动都清理会话恢复数据（Sessions / Sessions_Encrypted）：
+	// 这是"关闭自动恢复上次标签页"的关键。Chromium 正常关闭会把打开的
+	// 窗口/标签写入 Default\Sessions，若不清除，异常退出后即使没有恢复开关，
+	// 下次启动也可能弹"恢复页面？"气泡甚至恢复会话。每次启动前清空，
+	// 保证永远从默认页全新开始，且种子/生成流程的窗口也一并杜绝恢复。
+	for _, d := range []string{"Sessions", "Sessions_Encrypted"} {
+		_ = os.RemoveAll(filepath.Join(profileDir, "Default", d))
 	}
 
 	if _, err := os.Stat(chromePath); err != nil {
@@ -125,6 +129,11 @@ func main() {
 		"--disable-domain-reliability",                  // 禁用域名可靠性监控（网络错误不再上报谷歌）
 		"--disable-crashpad-for-testing",                // 禁用 Crashpad 崩溃上报
 		"--disable-default-apps",                        // 首次运行不再安装谷歌默认应用
+		// 关闭"自动恢复上次标签页"：不添加任何会话恢复开关（如 --restore-last-session、
+		// --session-restore=*），Chromium 默认每次全新打开默认页。
+		// --disable-session-crashed-bubble 进一步禁用异常退出后弹出的"恢复页面？"
+		// 气泡，避免用户误点恢复出上次会话（配合上方每次启动清理 Sessions 双保险）。
+		"--disable-session-crashed-bubble",
 		"--disable-features=OptimizationHints",          // 禁用优化指导服务（不再请求谷歌优化建议接口）
 		"--disable-features=NetworkTimeServiceQuerying", // 禁用网络时间服务（不再查询谷歌时间服务器）
 		"--disable-features=Translate",                  // 禁用内置谷歌翻译
