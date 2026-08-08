@@ -143,7 +143,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 ## 许可证
 
-本项目以 **GPL v3**（GNU General Public License v3）开源（见仓库根目录 `LICENSE`）。
+本项目以 **GPL v3**（GNU General Public License v3）开源，Copyright (C) 2026 **IceFire_Icer**（见仓库根目录 `LICENSE`）。
 
 随程序分发的第三方开源组件许可原文收录在 `third-party-licenses/`：
 - **OCS 网课助手**：MIT，Copyright (c) 2022 enncy（`ocsjs-LICENSE.txt`）
