@@ -123,12 +123,12 @@ func main() {
 		"--disable-infobars",
 		// 关闭涉及谷歌的功能：本程序面向国内网课场景，不需要谷歌账号与云端服务。
 		// 以下开关均已在 Chrome for Testing 152.0.7977.13 对应的 Chromium 源码中确认存在。
-		"--disable-sync",                                // 禁用谷歌账号同步
-		"--disable-background-networking",               // 禁用后台联网（UMA 统计、安全浏览、翻译、扩展更新等）
-		"--disable-component-update",                    // 禁用组件更新（安全浏览、证书吊销等从谷歌下载的组件）
-		"--disable-domain-reliability",                  // 禁用域名可靠性监控（网络错误不再上报谷歌）
-		"--disable-crashpad-for-testing",                // 禁用 Crashpad 崩溃上报
-		"--disable-default-apps",                        // 首次运行不再安装谷歌默认应用
+		"--disable-sync",                  // 禁用谷歌账号同步
+		"--disable-background-networking", // 禁用后台联网（UMA 统计、安全浏览、翻译、扩展更新等）
+		"--disable-component-update",      // 禁用组件更新（安全浏览、证书吊销等从谷歌下载的组件）
+		"--disable-domain-reliability",    // 禁用域名可靠性监控（网络错误不再上报谷歌）
+		"--disable-crashpad-for-testing",  // 禁用 Crashpad 崩溃上报
+		"--disable-default-apps",          // 首次运行不再安装谷歌默认应用
 		// 关闭"自动恢复上次标签页"：不添加任何会话恢复开关（如 --restore-last-session、
 		// --session-restore=*），Chromium 默认每次全新打开默认页。
 		// --disable-session-crashed-bubble 进一步禁用异常退出后弹出的"恢复页面？"
@@ -429,6 +429,10 @@ func copyDir(src, dst string) error {
 	return first
 }
 
+// copyFile 复制单个文件到目标路径（copyDir 并发 worker 的底层执行单元）。
+// 用 1MB 缓冲替代 io.Copy 默认的 32KB：profile_seed 里 4 个大文件占 ~10MB，
+// 大缓冲显著减少 read/write 系统调用次数（32KB 需要 ~320 次，1MB 仅 ~10 次）。
+// 每个 copyFile 调用创建自己的 buffer，并发 worker 之间无共享、无数据竞争。
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -440,9 +444,6 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer out.Close()
-	// 用 1MB 缓冲替代 io.Copy 默认的 32KB：profile_seed 里 4 个大文件占 ~10MB，
-	// 大缓冲显著减少 read/write 系统调用次数（32KB 需要 ~320 次，1MB 仅 ~10 次）。
-	// 每个 copyFile 调用创建自己的 buffer，并发 worker 之间无共享、无数据竞争。
 	if _, err := io.CopyBuffer(out, in, make([]byte, 1<<20)); err != nil {
 		return err
 	}
@@ -485,6 +486,9 @@ var cftPolicies = []struct{ name, value string }{
 // 全部值），而不是逐条 query。整键输出与单值输出格式一致，parseRegValue 可复用。
 // 键已存在时逐条比对已有值，缺失或值不对才补写；键不存在时整键写入全部策略。
 // 策略常驻注册表、退出不删除；卸载时由 installer.iss 负责清理。
+// 注意：策略写入失败只记日志、不阻塞主流程——这些策略全部是"关闭谷歌功能"
+// 的隐私优化项，写入失败不影响浏览功能本身；若将来有策略升级为安全必需项，
+// 应把此处改为 fatal（阻断启动）。
 func applyCftPolicies() bool {
 	out, err := hideConsole(exec.Command("reg", "query", cftPolicyKey)).CombinedOutput()
 	// 键不存在（查询失败）：整键写入全部策略。
@@ -564,6 +568,24 @@ func regValueEquals(typeVal, target string) bool {
 	return got == want
 }
 
+// CDP 欢迎页清理/端口等待的轮询参数。这些超时与间隔都是"兜底行为"的
+// 安全上限，不是对耗时的猜测：清理失败无副作用，超时后静默放弃即可。
+const (
+	// devToolsPortTries 是等待 DevToolsActivePort 文件的最大尝试次数（×500ms ≈ 8 秒）。
+	devToolsPortTries = 16
+	// devToolsPollInterval 是轮询调试端口/标签页的固定间隔。
+	devToolsPollInterval = 500 * time.Millisecond
+	// closeWelcomeDeadline 是 CDP 清理欢迎页的总体时间上限（约 12 秒）：
+	// 超过即放弃，避免浏览器已退出时白白阻塞启动器进程。
+	closeWelcomeDeadline = 12 * time.Second
+	// closeTabSettleDelay 是关闭一个欢迎页标签后的短暂停顿，给浏览器时间刷新列表。
+	closeTabSettleDelay = 300 * time.Millisecond
+	// closeWelcomeHTTPTimeout 是单次 CDP HTTP 请求的超时（浏览器卡死时快速失败）。
+	closeWelcomeHTTPTimeout = 2 * time.Second
+	// closeWelcomeMaxErrStreak 是连续失败上限：达到即认为浏览器退出/CDP 未就绪，放弃。
+	closeWelcomeMaxErrStreak = 3
+)
+
 // closeScriptCatWelcome 通过 CDP HTTP 接口关闭 ScriptCat 的"安装成功"欢迎页。
 // unpacked 扩展每次启动都会触发 onInstalled(reason=install)，ScriptCat 会因此
 // 打开 docs.scriptcat.org 的安装完成页；构建时已在扩展源码中屏蔽该逻辑，
@@ -573,8 +595,8 @@ func closeScriptCatWelcome(profileDir string) {
 	if port == 0 {
 		return
 	}
-	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(12 * time.Second)
+	client := &http.Client{Timeout: closeWelcomeHTTPTimeout}
+	deadline := time.Now().Add(closeWelcomeDeadline)
 	errStreak := 0
 	closedAny := false
 	for time.Now().Before(deadline) {
@@ -582,10 +604,10 @@ func closeScriptCatWelcome(profileDir string) {
 		if err != nil {
 			errStreak++
 			// 连续失败说明浏览器已退出或 CDP 尚未就绪，放弃清理。
-			if errStreak >= 3 {
+			if errStreak >= closeWelcomeMaxErrStreak {
 				return
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(devToolsPollInterval)
 			continue
 		}
 		errStreak = 0
@@ -599,13 +621,13 @@ func closeScriptCatWelcome(profileDir string) {
 		}
 		if closed > 0 {
 			closedAny = true
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(closeTabSettleDelay)
 			continue
 		}
 		if closedAny {
 			return
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(devToolsPollInterval)
 	}
 }
 
@@ -613,7 +635,7 @@ func closeScriptCatWelcome(profileDir string) {
 // 开启 --remote-debugging-port=0 时端口由系统分配，必须通过该文件获取。
 func waitDevToolsPort(profileDir string) int {
 	portFile := filepath.Join(profileDir, "DevToolsActivePort")
-	for i := 0; i < 16; i++ {
+	for i := 0; i < devToolsPortTries; i++ {
 		data, err := os.ReadFile(portFile)
 		if err == nil {
 			line := strings.TrimSpace(strings.SplitN(string(data), "\n", 2)[0])
@@ -621,16 +643,18 @@ func waitDevToolsPort(profileDir string) int {
 				return n
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(devToolsPollInterval)
 	}
 	return 0
 }
 
+// devToolsTab 是 CDP HTTP 接口 /json/list 返回的标签页条目（仅取所需的两个字段）。
 type devToolsTab struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
 }
 
+// listDevToolsTabs 通过 CDP HTTP 接口列出当前全部标签页。
 func listDevToolsTabs(client *http.Client, port int) ([]devToolsTab, error) {
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/json/list", port))
 	if err != nil {
@@ -644,6 +668,7 @@ func listDevToolsTabs(client *http.Client, port int) ([]devToolsTab, error) {
 	return tabs, nil
 }
 
+// closeDevToolsTab 通过 CDP HTTP 接口按标签页 id 关闭一个标签页，成功返回 true。
 func closeDevToolsTab(client *http.Client, port int, id string) bool {
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/json/close/%s", port, id))
 	if err != nil {
@@ -654,9 +679,10 @@ func closeDevToolsTab(client *http.Client, port int, id string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// bundleLogs 把启动器日志与版本信息打包成 zip，存到程序目录的 crash-logs 子文件夹。
+// bundleLogs 把启动器日志（含轮转旧日志）与版本信息打包成 zip，
+// 存到程序目录的 crash-logs 子文件夹，供用户回传给开发者排查错误。
 // 返回 zip 绝对路径；任何一步失败都返回空字符串（不阻塞主流程）。
-func bundleLogs(exeDir, reason string) string {
+func bundleLogs(exeDir string) string {
 	logDir := filepath.Join(exeDir, "crash-logs")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return ""
@@ -704,7 +730,7 @@ func fatal(msg string) {
 	if err == nil {
 		exeDir = filepath.Dir(exeDir)
 		logf("严重错误: %s", msg)
-		if zipPath := bundleLogs(exeDir, msg); zipPath != "" {
+		if zipPath := bundleLogs(exeDir); zipPath != "" {
 			logf("已打包日志: %s", zipPath)
 			// 打开文件夹并定位 zip 文件（explorer 立即返回，不等待）
 			_ = exec.Command("explorer.exe", "/select,"+zipPath).Start()

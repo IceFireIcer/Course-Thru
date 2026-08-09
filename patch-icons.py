@@ -27,6 +27,7 @@ RT_GROUP_ICON = 14
 
 
 def align(v, a):
+    """把 v 向上对齐到 a 的整数倍（PE 节/文件对齐用）。"""
     return (v + a - 1) & ~(a - 1)
 
 
@@ -55,6 +56,11 @@ class ResTree:
 
 
 def parse_resource_tree(raw, pe):
+    """解析 PE 资源段为 ResTree（type -> name -> lang -> blob）。
+
+    pe = (sections, rsrc_rva)。资源目录按三层嵌套（类型/名称/语言）遍历，
+    叶子数据项通过节表把 RVA 换算为文件偏移后读取原始字节。
+    """
     rva = pe[1]
     if not rva:
         return None
@@ -95,7 +101,11 @@ def parse_resource_tree(raw, pe):
 
 
 def pe_sections(raw):
-    """返回 (sections, rsrc_rva, rsrc_size)。"""
+    """解析 PE 头返回节表信息 (sections, rsrc_rva, rsrc_size)。
+
+    sections 为 [(name, 虚拟地址, 虚拟大小, 文件偏移, 文件大小), ...]；
+    rsrc_rva 是资源目录在内存中的 RVA（第三数据目录项）。
+    """
     e_lfanew = struct.unpack_from("<I", raw, 0x3C)[0]
     coff = e_lfanew + 4
     nsec = struct.unpack_from("<H", raw, coff + 2)[0]
@@ -113,6 +123,11 @@ def pe_sections(raw):
 
 
 def rva_to_off(sections, rva):
+    """把内存 RVA 换算为文件偏移；找不到所属节时返回 None。
+
+    范围用 max(vsize, rawsize) 判断：节在文件中的实际数据可能比虚拟大小
+    大或小（SectionAlignment 与 FileAlignment 不一致所致），取较大者兜底。
+    """
     for _, vaddr, vsize, rawptr, rawsize in sections:
         if vaddr <= rva < vaddr + max(vsize, rawsize):
             return rawptr + (rva - vaddr)
@@ -120,6 +135,7 @@ def rva_to_off(sections, rva):
 
 
 def get_data(raw, sections, rva, size):
+    """按 (RVA, size) 读取资源数据的原始字节；映射失败时返回空串。"""
     off = rva_to_off(sections, rva)
     if off is None:
         return b""
@@ -252,6 +268,10 @@ def serialize_tree(tree):
 
 
 def group_entries(blob):
+    """解析 GRPICONDIR 图标组数据，返回各图标条目字典列表。
+
+    每个条目含宽/高（0 表示 256）、位深、数据大小及对应 RT_ICON 的资源 id。
+    """
     count = struct.unpack_from("<H", blob, 4)[0]
     out = []
     for i in range(count):
@@ -264,6 +284,7 @@ def group_entries(blob):
 
 
 def build_group_blob(entries):
+    """把图标条目字典列表序列化回 GRPICONDIR 二进制（256px 的宽高写 0）。"""
     out = bytearray(struct.pack("<HHH", 0, 1, len(entries)))
     for e in entries:
         out += struct.pack(
@@ -281,6 +302,7 @@ def build_group_blob(entries):
 
 
 def make_icon_png(logo, w, h):
+    """把源 logo 缩放到 (w, h) 并编码为优化的 PNG 字节（作为 RT_ICON 资源）。"""
     img = logo.resize((w, h), Image.LANCZOS)
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -379,6 +401,12 @@ def append_section(raw, section_data, fixups, section_name):
 
 
 def patch_file(path, logo, groups=None, add_main=False):
+    """对单个 PE 文件执行图标替换；返回是否有改动。
+
+    - add_main=True：为无资源段的文件（Go 编译产物）新建主图标组（.rsrc）；
+      已有主图标组则跳过（幂等）。
+    - 否则：替换指定组（groups，如 IDR_MAINFRAME/101/1）的图标组描述与图像。
+    """
     raw = Path(path).read_bytes()
     tree = parse_resource_tree(raw, pe_sections(raw))
 
@@ -415,6 +443,7 @@ def patch_file(path, logo, groups=None, add_main=False):
 
 
 def main():
+    """命令行入口：解析参数后调用 patch_file 处理目标 PE 文件。"""
     ap = argparse.ArgumentParser()
     ap.add_argument("pe_path")
     ap.add_argument("--logo", required=True)

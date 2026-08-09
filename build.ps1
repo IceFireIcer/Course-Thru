@@ -33,6 +33,7 @@ $ScriptCatUrl  = "https://github.com/scriptscat/scriptcat/releases/download/$Scr
 $KeepChromeLocales = @("en-US", "zh-CN", "zh-TW")
 $KeepExtLocales    = @("en", "zh_CN", "zh_TW")
 
+# 日志输出辅助：Info 正常信息（青色）、Warn 警告（黄色）、Fail 致命错误（红色并终止）。
 function Info($m)   { Write-Host "[build] $m" -ForegroundColor Cyan }
 function Warn($m)   { Write-Host "[build] 警告: $m" -ForegroundColor Yellow }
 function Fail($m)   { Write-Host "[build] 错误: $m" -ForegroundColor Red; exit 1 }

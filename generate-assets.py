@@ -34,6 +34,7 @@ def gray(png):
 
 
 def make_wizard_bmp(path, w, h, logo_size):
+    """生成一张 Inno Setup 安装向导位图：白底 + 居中 logo（BMP 格式）。"""
     canvas = Image.new("RGB", (w, h), (255, 255, 255))
     logo = im.resize((logo_size, logo_size), Image.LANCZOS)
     canvas.paste(logo, ((w - logo_size) // 2, (h - logo_size) // 2), logo)
@@ -41,6 +42,7 @@ def make_wizard_bmp(path, w, h, logo_size):
 
 
 def main():
+    """从 logo\\logo.png 生成全部衍生资源到 assets\\（幂等，可重复执行）。"""
     global im
     if not SRC.is_file():
         raise SystemExit(f"缺少源 logo：{SRC}")
