@@ -112,8 +112,21 @@ if (-not $ScriptCatKey) {
 }
 Info "复用固定 key（扩展 ID 恒定）: $($ScriptCatKey.Substring(0,32))..."
 
+# 百度扩展同样注入固定 key：百度扩展没有 OCS 那样按 ID 存储的预置数据，
+# 但不固定 ID 会让扩展 ID 由安装路径决定，路径规范化差异可能导致 ID 漂移、
+# 事件丢失（新建标签页跳百度失效）。固定后 ID 恒定（=> kjkhdfinhacckmpplnddgcbbpmncmfmk）。
+$baiduKeyFile = Join-Path $KeysDir "baidu-search.key"
+if (-not (Test-Path $baiduKeyFile)) {
+    Fail "缺少 keys\baidu-search.key！百度扩展 ID 由此公钥决定，请用 git restore 恢复该文件后重试。"
+}
+$BaiduKey = (Get-Content $baiduKeyFile -Raw).Trim()
+if (-not $BaiduKey) {
+    Fail "keys\baidu-search.key 内容为空，请通过 git 恢复该文件。"
+}
+Info "复用百度扩展固定 key: $($BaiduKey.Substring(0,32))..."
+
 # 私钥不参与构建（unpacked 扩展加载无需签名校验），仅在将来需要
-# CRX 签名 / 商店上架时才有用。它已被 .gitignore 排除，请自行在安全位置
+# CRX 签名 / 商店上架时才有用。它们已被 .gitignore 排除，请自行在安全位置
 # 备份；缺失不阻塞构建，仅提示。
 $privKeyFile = Join-Path $KeysDir "scriptcat_private.pem"
 if (-not (Test-Path $privKeyFile)) {
@@ -290,6 +303,16 @@ $baiduDist = Join-Path $Dist "extensions\baidu-search"
 # 嵌套成 baidu-search\baidu-search\...，旧 manifest 残留导致产物不是最新。
 if (Test-Path $baiduDist) { Remove-Item $baiduDist -Recurse -Force }
 Copy-Item -LiteralPath $baiduExt -Destination $baiduDist -Recurse -Force
+
+# 注入固定 key 到百度扩展 manifest（ID 恒定，消除路径导致的 ID 漂移/事件丢失）
+$baiduMfPath = Join-Path $baiduDist "manifest.json"
+$baiduMf = [System.IO.File]::ReadAllText($baiduMfPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+if (-not $baiduMf.key -or $baiduMf.key -ne $BaiduKey) {
+    Info "注入固定 key 到百度扩展 manifest..."
+    $baiduMf | Add-Member -NotePropertyName "key" -NotePropertyValue $BaiduKey -Force
+    $baiduJson = $baiduMf | ConvertTo-Json -Depth 20 -Compress
+    [System.IO.File]::WriteAllText($baiduMfPath, $baiduJson, [System.Text.UTF8Encoding]::new($false))
+}
 
 # 打包内置主页（course-thru\ -> dist\course-thru）：启动器 defaultUrl 留空时以
 # file:// 打开该页面。页面内资源全部相对路径引用，随程序分发即可自包含。

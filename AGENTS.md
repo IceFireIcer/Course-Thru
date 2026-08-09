@@ -15,7 +15,7 @@ Course-Thru (课速通) is a Windows-only Chromium distribution that preloads th
 - `logo/logo.png` — single source of truth for all branding assets (generated into `assets/`).
 - `third-party-licenses/` — license texts of bundled open-source components (OCS=MIT, ScriptCat=GPL v3), kept for attribution compliance.
 - `installer.iss` / `stop-browser.ps1` — Inno Setup packaging and uninstall cleanup (desktop icon task is checked by default; uninstall deletes the CfT policy registry key).
-- `keys/scriptcat.key` — committed public key that fixes the extension ID; never delete it or seeded data breaks. `build.ps1` fails loudly rather than regenerating a new key if it goes missing.
+- `keys/scriptcat.key` / `keys/baidu-search.key` — committed public keys that fix the extension IDs (ScriptCat=hodgdaljmnbiliahlpcjcpiphnkbmfff, baidu=kjkhdfinhacckmpplnddgcbbpmncmfmk); never delete them or seeded data breaks. `build.ps1` fails loudly rather than regenerating a new key if any goes missing.
 - `config.json.example` — reference for the optional config fields (`defaultUrl`, `extraArgs`, `appName`, `extensions`).
 - `version.txt` — single source of truth for the version (`x.y.z`); a full build auto-increments the patch number and writes it back.
 
@@ -48,8 +48,8 @@ Run the result by launching `dist\Course-Thru.exe`. Component versions (Chromium
 
 ## Security & Key Handling
 
-- The extension ID is derived solely from the committed public key (`keys/scriptcat.key`); it is already baked into the shipped `manifest.json`, so end users never need key files. Losing the key changes the ID and invalidates all seeded script data — restore it with `git restore`, never regenerate.
-- The private key (`keys/scriptcat_private.pem`) is git-ignored, unused by builds, and needed only for future CRX signing or store publishing. Keep a safe local backup; never commit or package it.
+- Each extension ID is derived solely from its committed public key (`keys/scriptcat.key`, `keys/baidu-search.key`); it is already baked into the shipped `manifest.json`, so end users never need key files. Losing a key changes that extension's ID and invalidates all seeded script data — restore it with `git restore`, never regenerate.
+- Private keys (`keys/*_private.pem`) are git-ignored, unused by builds, and needed only for future CRX signing or store publishing. Keep safe local backups; never commit or package them.
 - CfT enterprise policies are written under `HKCU\Software\Policies\Google\Chrome for Testing` (a path specific to Chrome for Testing), so they affect only this browser, never the user's regular Chrome. The launcher queries the whole key once and writes only missing/differing values in parallel; the installer cleans the key on uninstall.
 
 ## Testing Guidelines

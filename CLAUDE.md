@@ -51,7 +51,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 | `extensions/ocs.user.js` | OCS 脚本（vendor，构建时打包进产物） |
 | `course-thru/` | 内置主页（file:// 自包含，资源全相对路径，随程序分发） |
 | `installer.iss` | Inno Setup：桌面图标任务**默认勾选**；卸载跑 `stop-browser.ps1` 关进程 + 删 CfT 注册表策略 |
-| `keys/scriptcat.key` | 固定扩展 ID 的公钥，**不可删除/重新生成** |
+| `keys/scriptcat.key` / `keys/baidu-search.key` | 固定扩展 ID 的公钥，**不可删除/重新生成**（ScriptCat=>hodgdaljmnbiliahlpcjcpiphnkbmfff，百度=>kjkhdfinhacckmpplnddgcbbpmncmfmk） |
 | `third-party-licenses/` | 第三方开源许可证原文（OCS=MIT、ScriptCat=GPL v3），合规保留原作者署名 |
 
 ## 关键技术决策（接手人必读）
