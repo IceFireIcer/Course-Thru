@@ -7,7 +7,7 @@
 // （script:<uuid> 元数据 + scriptCode:<uuid> 代码），status=1 默认启用，无需任何服务器或 UI 点击。
 import { readFileSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -31,14 +31,20 @@ if (!chromium || !extDir || !profileDir || !ocsFile) {
 }
 
 // ---------- CDP 客户端 ----------
+// CDP 是基于 WebSocket 的调试协议客户端：send() 发送带自增 id 的请求，
+// 响应按 id 回到对应 pending Promise（简化版 JSON-RPC）。
 class CDP {
   constructor(wsUrl) {
     this.ws = new WebSocket(wsUrl);
     this.id = 0;
     this.pending = new Map();
   }
+  // open 等待 WebSocket 握手完成，并注册 onmessage 分发器（按 msg.id 回调 pending）。
   async open() {
-    await new Promise((res, rej) => { this.ws.onopen = res; this.ws.onerror = rej; });
+    await new Promise((res, rej) => {
+      this.ws.onopen = res;
+      this.ws.onerror = () => rej(new Error('CDP WebSocket 连接失败'));
+    });
     this.ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.id && this.pending.has(msg.id)) {
@@ -47,7 +53,16 @@ class CDP {
         msg.error ? p.reject(new Error(msg.error.message)) : p.resolve(msg.result);
       }
     };
+    // 连接中途断开（页面崩溃/浏览器退出）时，把所有未决请求全部拒绝，
+    // 避免 send() 的 Promise 永不 settle 导致脚本永久挂起。
+    const failAll = (reason) => {
+      for (const p of this.pending.values()) p.reject(new Error(reason));
+      this.pending.clear();
+    };
+    this.ws.onclose = () => failAll('CDP WebSocket 连接已关闭');
+    this.ws.onerror = () => failAll('CDP WebSocket 连接出错');
   }
+  // send 发送一条 CDP 方法调用，返回结果 Promise（错误时 reject）。
   send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const msgId = ++this.id;
@@ -55,9 +70,11 @@ class CDP {
       this.ws.send(JSON.stringify({ id: msgId, method, params }));
     });
   }
+  // close 关闭连接（忽略关闭过程中的异常）。
   close() { try { this.ws.close(); } catch {} }
 }
 
+// newTab 通过 CDP HTTP 接口新建一个 about:blank 标签页，返回其描述对象。
 async function newTab(port) {
   const res = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' });
   return res.json();
@@ -76,8 +93,18 @@ const BFS_FN = `(root) => {
   return all;
 }`;
 
+// evalIn 在目标（页面/扩展 SW）上下文执行一段 JS 表达式并返回其求值结果。
+// awaitPromise: true 让 await 的 Promise 也能同步等到结果；returnByValue 把对象序列化为可读值。
+// 注意：awaitPromise 下 Promise reject 时 CDP 不报错，而是把异常放在
+// exceptionDetails 字段返回、result.value 为 undefined。这里显式抛出，
+// 否则 waitFor 的 try/catch 与 waitForRetry 的重试逻辑都会静默失效。
 async function evalIn(cdp, expression) {
   const r = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  if (r.exceptionDetails) {
+    const ex = r.exceptionDetails.exception;
+    const msg = ex?.description || ex?.value || r.exceptionDetails.text || '页面脚本异常';
+    throw new Error(String(msg).split('\n')[0]); // 只取首行，避免把完整堆栈塞进错误信息
+  }
   return r.result.value;
 }
 
@@ -175,7 +202,7 @@ function buildOcsEntry(code) {
     ...(raw.version?.length ? { version: dedupe(raw.version) } : {}),
   };
   const name = metadata.name?.[0] || 'OCS 网课助手';
-  const uuid = crypto.randomUUID();
+  const uuid = randomUUID();
   const now = Date.now();
   // ScriptCat 自动更新源：GitHub 最新 Release 资产（稳定 URL，始终指向最新版本）
   const origin = 'https://github.com/ocsjs/ocsjs/releases/latest/download/ocs.user.js';
@@ -231,6 +258,8 @@ if (keyB64) {
 console.log(`[gen-profile] 扩展 ID: ${extId}`);
 
 // ---------- 启动 Chromium ----------
+// launch 用预置参数（独立 user-data-dir + 加载扩展 + 开调试端口）拉起 Chromium。
+// stdio 丢弃（本脚本只通过 CDP 交互），返回子进程句柄。
 function launch() {
   return spawn(chromium, [
     `--user-data-dir=${profileDir}`,
@@ -261,6 +290,8 @@ async function closeGracefully(proc, port) {
   await exited;
 }
 
+// waitCdp 轮询 CDP HTTP 接口直到 Chromium 的调试服务就绪（首启启动较慢，需等待）。
+// 默认最多尝试 20 次、每次间隔 1 秒；超时则抛错终止脚本。
 async function waitCdp(port, tries = 20) {
   for (let i = 0; i < tries; i++) {
     try {

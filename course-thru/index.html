@@ -725,6 +725,7 @@
     let editing = false;
     let editingIndex = -1; // -1 表示新增
 
+    // loadLinks 从 localStorage 读取快捷入口数组；无缓存或数据非法时回退到默认入口。
     function loadLinks() {
       try {
         const raw = localStorage.getItem(LINKS_KEY);
@@ -738,12 +739,15 @@
       } catch (e) {}
       links = DEFAULT_LINKS.map(l => ({ ...l }));
     }
+    // saveLinks 把当前快捷入口数组写回 localStorage（失败静默，不影响使用）。
     function saveLinks() {
       try { localStorage.setItem(LINKS_KEY, JSON.stringify(links)); } catch (e) {}
     }
+    // escapeHtml 对用户输入的文本做 HTML 转义，防止 XSS 与布局破坏。
     function escapeHtml(s) {
       return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
+    // normalizeUrl 补全网址：已带 http(s) 协议则原样返回，否则自动加 https:// 前缀。
     function normalizeUrl(url) {
       const u = url.trim();
       if (/^https?:\/\//i.test(u)) return u;
@@ -758,6 +762,7 @@
     try { iconCache = JSON.parse(localStorage.getItem(ICON_KEY) || '{}'); } catch (e) { iconCache = {}; }
     const saveIconCache = () => { try { localStorage.setItem(ICON_KEY, JSON.stringify(iconCache)); } catch (e) {} };
 
+    // hostOf 提取 URL 的主机名；解析失败返回空串。
     const hostOf = u => { try { return new URL(u, location.href).hostname; } catch (e) { return ''; } };
 
     // 部分平台 /favicon.ico 路径返回 404，这里配置按 host 精确匹配的真实图标地址
@@ -765,6 +770,7 @@
       'www.icourse163.org': ['https://edu-image.nosdn.127.net/32a8dd2a-b9aa-4ec9-abd5-66cd8751befb.png?imageView&quality=100']
     };
 
+    // buildSources 按 host 构造 favicon 候选源列表（精确地址优先，/favicon.ico 次之，谷歌兜底）。
     function buildSources(host) {
       if (!host) return [];
       const precise = PRECISE_ICONS[host] || [];
@@ -775,11 +781,14 @@
       ];
     }
 
+    // showImg 把已探测成功的图标 URL 以背景图形式渲染到入口卡片上。
     function showImg(icon, src) {
       icon.style.backgroundImage = 'url("' + src + '")';
       icon.classList.add('img');
     }
 
+    // loadFavicon 为单个入口卡片加载 favicon：有缓存直接用，无缓存则逐个源探测
+    // （首个成功即写入缓存），全部失败则保持默认图标样式。
     function loadFavicon(icon, url) {
       if (!icon || !url) return;
       const host = hostOf(url);
@@ -819,6 +828,8 @@
       del: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
     };
 
+    // renderGrid 依据 links 数组重新渲染入口卡片网格；
+    // 编辑态下卡片变为可点击进入编辑，并额外渲染"添加"占位卡片。
     function renderGrid() {
       const grid = document.getElementById('grid');
       grid.innerHTML = '';
@@ -868,6 +879,8 @@
     /* ================================================================
        交互绑定（非编辑态：磁吸 + 图标微动；编辑态：角标按钮）
        ================================================================ */
+    // bindGrid 给卡片绑定交互：编辑态绑定角标按钮（修改/删除），
+    // 非编辑态绑定 gsap 磁吸跟随与按下动效（尊重系统"减少动态效果"设置）。
     function bindGrid() {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       document.querySelectorAll('.qcard.editing').forEach(card => {
@@ -919,6 +932,7 @@
     /* ================================================================
        编辑模式
        ================================================================ */
+    // setEditing 切换编辑模式：切换编辑按钮图标、重绘网格并播放一次入场动画。
     function setEditing(on) {
       editing = on;
       document.getElementById('editBtn').classList.toggle('active', on);
@@ -935,6 +949,7 @@
         { y: 0, opacity: 1, duration: 0.4, stagger: 0.03, ease: 'power3.out', overwrite: 'auto' });
     }
 
+    // openAddModal 打开"添加入口"弹窗（清空表单，编辑目标标记为新增）。
     function openAddModal() {
       editingIndex = -1;
       document.getElementById('modalTitle').textContent = '添加入口';
@@ -942,6 +957,7 @@
       document.getElementById('inpUrl').value = '';
       showModal(true);
     }
+    // openEditModal 打开"修改入口"弹窗，用第 i 个入口的名称与网址回填表单。
     function openEditModal(i) {
       editingIndex = i;
       const link = links[i];
@@ -951,6 +967,7 @@
       showModal(true);
     }
 
+    // showModal 显示/隐藏编辑弹窗，并同步 aria-hidden 与焦点管理。
     function showModal(show) {
       const mask = document.getElementById('modalMask');
       mask.classList.toggle('show', show);
@@ -962,6 +979,8 @@
       }
     }
 
+    // saveModal 校验并保存弹窗表单：名称/网址必填、URL 格式校验后写入 links，
+    // 持久化并重绘（新增/修改共用，由 editingIndex 区分）。
     function saveModal() {
       const name = document.getElementById('inpName').value.trim();
       const url = document.getElementById('inpUrl').value.trim();
@@ -985,19 +1004,25 @@
         { y: 0, opacity: 1, duration: 0.4, stagger: 0.03, ease: 'power3.out', overwrite: 'auto' });
     }
 
-    let delTimer = null;
+    // deleteLink 二次确认式删除：第一次点击将按钮"武装"并显示"删"字，
+    // 2.5 秒内再次点击才真正删除；超时自动解除武装，防误删。
+    // 解除定时器挂在按钮自身（dataset.delTimer）而非全局变量：若共用同一个
+    // 定时器引用，连续武装两张卡片时，后一张的 clearTimeout 会清掉前一张的
+    // 解除定时器，导致前一张永远停在"删"字武装态无法自动还原。
     function deleteLink(i, btn) {
       if (!btn.classList.contains('armed')) {
         btn.classList.add('armed');
         btn.innerHTML = '删';
-        clearTimeout(delTimer);
-        delTimer = setTimeout(() => {
+        const timer = setTimeout(() => {
           btn.classList.remove('armed');
           btn.innerHTML = ICON_SVG.del;
+          delete btn.dataset.delTimer; // 定时器已触发，清除残留 id
         }, 2500);
+        btn.dataset.delTimer = String(timer);
         return;
       }
-      clearTimeout(delTimer);
+      clearTimeout(Number(btn.dataset.delTimer || 0));
+      delete btn.dataset.delTimer;
       links.splice(i, 1);
       saveLinks();
       renderGrid();
@@ -1106,6 +1131,7 @@
     /* ================================================================
        实时时钟（含秒 + 时区）
        ================================================================ */
+    // tzLabel 把本地时区偏移量格式化为 "UTC+8" / "UTC-5:30" 形式的标签。
     function tzLabel() {
       // 例如 +08:00 → "UTC+8"，-05:30 → "UTC-5:30"
       const m = new Date().getTimezoneOffset(); // 分钟，UTC 相对本地为正
@@ -1114,6 +1140,7 @@
       const mm = abs % 60;
       return 'UTC' + (m > 0 ? '-' : '+') + hh + (mm ? ':' + String(mm).padStart(2, '0') : '');
     }
+    // tickClock 刷新右上角时钟（时:分:秒）；时区标签只在首次调用时写入一次。
     function tickClock() {
       const d = new Date();
       const pad = n => String(n).padStart(2, '0');
