@@ -53,11 +53,12 @@ Source: "{#DIST}\version.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop-browser.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; 快捷方式名称用中文品牌名「课速通」（用户可见，安装目录/进程名仍为 Course-Thru）
+Name: "{autoprograms}\课速通"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\课速通"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "立即启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "立即启动 课速通"; Flags: nowait postinstall skipifsilent
 
 ; 卸载前关闭本程序启动的浏览器进程（调用随包分发的 stop-browser.ps1，按路径过滤，不影响用户的 Google Chrome）
 [UninstallRun]
