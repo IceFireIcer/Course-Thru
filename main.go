@@ -240,6 +240,13 @@ func loadConfig(exeDir string) Config {
 	if !contains(cfg.Extensions, "extensions/scriptcat") {
 		cfg.Extensions = append(cfg.Extensions, "extensions/scriptcat")
 	}
+	// baidu-search 承载「默认搜索=百度 + 新标签页跳百度」：从旧版本升级时
+	// 用户目录里可能残留不含它的 config.json（升级安装会覆盖，但便携版解压
+	// 覆盖可能漏掉），若缺项则扩展不加载、新标签页不再跳百度。与 scriptcat
+	// 一样强制保留，保证该功能始终可用（幂等去重）。
+	if !contains(cfg.Extensions, "extensions/baidu-search") {
+		cfg.Extensions = append(cfg.Extensions, "extensions/baidu-search")
+	}
 	return cfg
 }
 
