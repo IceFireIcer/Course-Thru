@@ -28,7 +28,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 - ScriptCat 图标加载 OCS 无报错、开发者模式已开启、userScripts 开关已持久化；
 - 任何启动都不出现 `docs.scriptcat.org` 页面（install_comple / changelog / open-dev）；
 - 首启后 `dist\first_run.flag` 出现；
-- 默认搜索为百度（设置页标注「由扩展控制」）、新标签页直达百度且无任何确认弹窗；
+- 默认搜索为百度（设置页标注「由扩展控制」）、**点击加号新建标签页直达百度**且无任何确认弹窗（测新标签页跳转须用真实点击/Ctrl+T 或扩展 SW 内 `chrome.tabs.create`，CDP `Target.createTarget` 创建的标签带 opener 会误判）；
+- 内置主页：右上角版本 pill 显示 `v<当前版本>`（构建期注入）、左下角反馈按钮可点开、10 个网课入口齐全且 DeepSeek 在最后、入场动画正常（版权元素 `.copyright` 与反馈按钮均参与 GSAP 入场，选择器用类不用 id）；
 - **会话不恢复**：打开多个标签页后关闭浏览器再启动，只打开默认页（启动参数含 `--disable-session-crashed-bubble`、无 restore 开关，且启动器每次清理 `Default/Sessions*`）。
 改过 `gen-profile.mjs` 时必须删掉 `dist\profile_seed` 重新生成并端到端验证。
 
@@ -42,14 +43,14 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 
 | 组件 | 作用 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）；**每次启动清 `Default/Sessions*` 关闭会话恢复**；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能，含 `--disable-session-crashed-bubble` 禁崩溃恢复气泡）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
+| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json（**loadConfig 强制保留 scriptcat 与 baidu-search 两扩展**，幂等去重，防用户自定义列表破坏预置数据）；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）；**每次启动清 `Default/Sessions*` 关闭会话恢复**；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能，含 `--disable-session-crashed-bubble` 禁崩溃恢复气泡）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
 | `build.ps1` | 构建流水线（步骤有编号注释）。幂等下载（直连失败自动回退系统代理）、语言裁剪、注入 key、调用各 patch 脚本 |
 | `gen-profile.mjs` | CDP 驱动真实 Chromium 生成 `profile_seed`：开开发者模式 + userScripts 开关，把 OCS 直接写入 ScriptCat 的 `chrome.storage.local`（status=1 默认启用），重启后验证。**信号驱动**（DOM 条件等待 + MutationObserver），不固定 sleep |
 | `patch-branding.py` | 构建期替换 `locales\*.pak` / `resources.pak` 里的 "Chrome for Testing" 品牌字样与 Google LLC 版权（幂等） |
 | `generate-assets.py` / `patch-logo.py` / `patch-icons.py` | 从 `logo/logo.png` 生成全套资产，替换 Chromium pak 内嵌图片与 chrome.exe / chrome.dll / 启动器 PE 图标（幂等） |
-| `extensions/baidu-search/` | 内置 MV3 扩展：默认搜索设为百度（chrome_settings_overrides）+ 新标签页跳百度（background.js 监听 chrome://newtab 并导航） |
+| `extensions/baidu-search/` | 内置 MV3 扩展：默认搜索设为百度（chrome_settings_overrides）+ 新标签页跳百度（background.js 监听 chrome://newtab 并导航，**只按 URL 判断、不查 openerTabId**——Chrome 152 起 UI 新建标签页 openerTabId 也非空，查 opener 会误拦截用户点击加号；见「关键约束」） |
 | `extensions/ocs.user.js` | OCS 脚本（vendor，构建时打包进产物） |
-| `course-thru/` | 内置主页（file:// 自包含，资源全相对路径，随程序分发） |
+| `course-thru/` | 内置主页（file:// 自包含，资源全相对路径，随程序分发）：10 个网课平台入口（横向铺开自动缩放 + 按名称长度动态调字号）+ 顶部右侧版本 pill（Liquid Glass，构建期由 build.ps1 注入 `v<版本>`）+ 左下角反馈按钮（Liquid Glass，跳飞书表单） |
 | `installer.iss` | Inno Setup：桌面图标任务**默认勾选**；卸载跑 `stop-browser.ps1` 关进程 + 删 CfT 注册表策略 |
 | `keys/scriptcat.key` / `keys/baidu-search.key` | 固定扩展 ID 的公钥，**不可删除/重新生成**（ScriptCat=>hodgdaljmnbiliahlpcjcpiphnkbmfff，百度=>kjkhdfinhacckmpplnddgcbbpmncmfmk） |
 | `third-party-licenses/` | 第三方开源许可证原文（OCS=MIT、ScriptCat=GPL v3），合规保留原作者署名 |
@@ -69,6 +70,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 - **绝不能加 `--disable-extensions-except`**：会触发 Chromium「先禁用全部扩展再重启进程」流程，首启弹「加载扩展程序时候出错」并延迟出窗。
 - **`keys/scriptcat.key` 丢失 = 扩展 ID 变化 = 所有既有用户脚本数据失效**。`build.ps1` 会直接 Fail 而不是重新生成密钥对，须用 `git restore` 恢复。私钥 `keys/scriptcat_private.pem` 被 gitignore，构建不依赖。
 - **扩展接管弹窗**：不用 `chrome_url_overrides` 接管浏览器设置就不会弹确认框；默认搜索这类简单接管靠预置 `extensions.simple_override_begin_confirmation_timestamp` 未来时间戳静默（见 `main.go` 的 `silentOverrideTimestamp`，Preferences 解析用 `json.Decoder.UseNumber` 保留无关字段大整数精度、目标时间戳以整数原文写入，避免被改写成科学计数法丢精度，比较用 float64）；升级用户需在启动时清理 Preferences 里的 chrome_url_overrides 残留。
+- **新标签页判断不能查 openerTabId**：Chrome 152 起通过 UI（Ctrl+T / 点击加号）新建的标签页 `openerTabId` 非空（指向当前活动标签页），旧版 `!tab.openerTabId` 判断会把真实用户操作误拦截，导致点击加号不跳百度（已实测复现并修复）。`background.js` 只按 URL 判断是否新标签页页（`chrome://newtab` / `chrome://new-tab-page-third-party`），从链接/脚本新开的标签地址是具体链接不会被误伤。测试时注意：CDP `Target.createTarget` 创建的标签带 opener 会误判失败，须用扩展 SW 内部 `chrome.tabs.create({})` 或系统级 Ctrl+T 复现。
 - **品牌字样/logo 无法用命令行或策略修改**：编译在 `locales\*.pak`、`chrome_*.pak` 与 PE 资源里，只能构建期替换。patch 脚本全部幂等，升级 Chromium 后构建自动重新打补丁。已知限制：新标签页顶部 Google 字标由二进制内资源动态提供，**无法替换**。
 - **CfT 企业策略路径不同于普通 Chrome**（`HKCU\Software\Policies\Google\Chrome for Testing`），因此只影响本程序，不波及用户日常 Chrome；退出不删除，卸载时由 installer 清理。
 - **默认搜索用扩展而非策略**：`DefaultSearchProvider*`、`MetricsReportingEnabled`、`SafeBrowsingEnabled` 都是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略（chrome://policy 显示「错误, 已忽略」）；扩展的 `chrome_settings_overrides` 在 unpacked 扩展上直接生效（设置页标注「由扩展控制」）。UMA 上传改由 `--disable-background-networking` 在网络层关闭。
