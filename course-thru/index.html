@@ -83,6 +83,52 @@
     align-items: center;
     justify-content: space-between;
   }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* Liquid glass 通用样式：半透明白渐变 + 毛玻璃 + 内高光 + 扫光层 */
+  .glass {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(255,255,255,0.62), rgba(255,255,255,0.18));
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.65);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.75),
+      0 12px 32px -14px rgba(31, 53, 201, 0.35);
+  }
+  .glass-shine {
+    position: absolute;
+    left: -45%;
+    top: 0;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
+    transform: skewX(-14deg);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  /* ---- 右上角版本 pill（时间 pill 左侧） ---- */
+  .version-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 46px;
+    padding: 0 18px;
+    border-radius: 999px;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    will-change: transform;
+  }
+  .version-pill .pill-ico { color: var(--brand); opacity: 0.9; }
+  .version-pill .pill-text { font-size: 15.5px; font-weight: 600; }
   .brand {
     display: inline-flex;
     align-items: center;
@@ -328,22 +374,25 @@
 
   .links-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 18px;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 14px;
     width: 100%;
-    max-width: 920px;
+    max-width: 1800px;
   }
   .links-grid.editing {
-    grid-template-columns: repeat(3, 1fr);
-    max-width: 560px;
+    grid-template-columns: repeat(5, 1fr);
+    max-width: 760px;
   }
   .qcard {
     position: relative;
+    /* 容器查询：卡片内部图标/文字以 cqw 随卡片宽度自动缩放 */
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 13px;
-    padding: 22px 10px 17px;
+    justify-content: center;
+    gap: clamp(6px, 9cqw, 13px);
+    padding: clamp(10px, 9cqw, 18px) 6px clamp(8px, 7cqw, 14px);
     border-radius: var(--radius-card);
     text-decoration: none;
     background: var(--card);
@@ -359,13 +408,13 @@
     box-shadow: 0 22px 44px -24px rgba(31, 53, 201, 0.55);
   }
   .qmono {
-    width: 54px;
-    height: 54px;
-    border-radius: 16px;
+    width: clamp(44px, 42cqw, 64px);
+    height: clamp(44px, 42cqw, 64px);
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 26px;
+    font-size: clamp(21px, 21cqw, 30px);
     color: var(--brand);
     background: var(--brand-soft);
     border: 1px solid rgba(63, 85, 249, 0.18);
@@ -378,15 +427,18 @@
     background-repeat: no-repeat;
   }
   .qname {
-    font-size: 15.5px;
-    letter-spacing: 0.05em;
+    /* 长名称自动换行最多三行；实际字号由 JS 动态策略接管（短名放大、长名自动调小） */
+    font-size: clamp(15px, 10cqw, 18px); /* JS 未接管时的兜底字号 */
+    letter-spacing: 0.02em;
     color: var(--ink);
     text-align: center;
     line-height: 1.3;
     max-width: 100%;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    word-break: break-all;
   }
   /* 编辑角标 */
   .card-actions {
@@ -420,12 +472,13 @@
 
   /* 添加卡片 */
   .add-card {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    min-height: 140px;
+    gap: clamp(6px, 9cqw, 12px);
+    min-height: clamp(88px, 80cqw, 150px);
     border-radius: var(--radius-card);
     border: 1.5px dashed rgba(63, 85, 249, 0.35);
     background: rgba(255, 255, 255, 0.4);
@@ -469,6 +522,39 @@
     transition: color 0.3s ease, opacity 0.3s ease;
   }
   .copyright:hover { color: var(--brand); opacity: 1; }
+
+  /* ---- 左下角反馈按钮（Liquid Glass，亮橙黄） ---- */
+  .feedback-btn {
+    position: fixed;
+    left: 26px;
+    bottom: 20px;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 30px;
+    border-radius: 26px;
+    text-decoration: none;
+    font-family: 'Smiley Sans', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    color: #ff9a1c;   /* 亮橙黄（橙子皮亮色） */
+    will-change: transform;
+    transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .feedback-btn:hover {
+    color: #ff7a00;
+    border-color: rgba(255, 154, 28, 0.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.8),
+      0 18px 44px -18px rgba(255, 122, 0, 0.55);
+  }
+  .feedback-btn .fb-ico {
+    width: 24px;
+    height: 24px;
+    color: #ff7a00;
+    flex: none;
+  }
 
   /* ============ 编辑弹窗 ============ */
   .modal-mask {
@@ -578,17 +664,16 @@
     .hero-sub { margin-top: 10px; }
     .searchbar { margin-top: 22px; height: 56px; }
     .search-go { height: 42px; padding: 0 22px; }
-    .links-grid { gap: 12px; max-width: 840px; }
-    .links-grid.editing { max-width: 560px; }
-    .qcard { padding: 16px 8px 13px; gap: 10px; }
-    .qmono { width: 46px; height: 46px; font-size: 23px; }
+    .links-grid { gap: 12px; max-width: 1080px; }
+    .links-grid.editing { max-width: 760px; }
     .launch { gap: 13px; }
-    .add-card { min-height: 116px; }
+    .add-card { min-height: clamp(80px, 80cqw, 140px); }
   }
 
-  /* 中宽屏：入口卡收窄 */
-  @media (max-width: 1200px) {
-    .links-grid { grid-template-columns: repeat(3, 1fr); max-width: 560px; }
+  /* 中宽屏：入口降为两行，卡片保持可读 */
+  @media (max-width: 900px) {
+    .links-grid { grid-template-columns: repeat(5, 1fr); max-width: 660px; }
+    .links-grid.editing { grid-template-columns: repeat(3, 1fr); max-width: 480px; }
   }
 
   /* 移动端 */
@@ -602,18 +687,28 @@
     .clock-time { font-size: 16px; }
     .clock-sec { font-size: 11px; }
     .clock-tz { font-size: 11px; padding-left: 8px; }
-    .stage { padding-top: 64px; }
-    .hero-tag { font-size: 13px; letter-spacing: 0.26em; }
-    .hero-sub { font-size: 15px; letter-spacing: 0.08em; }
-    .searchbar { height: 54px; padding-left: 16px; }
+    .version-pill { height: 38px; padding: 0 14px; gap: 6px; font-size: 13px; }
+    .version-pill .pill-text { font-size: 13px; }
+    .feedback-btn { left: 14px; bottom: 12px; padding: 13px 22px; font-size: 16px; gap: 9px; border-radius: 20px; }
+    .feedback-btn .fb-ico { width: 19px; height: 19px; }
+    /* 移动端允许纵向滚动：内容超出视口时自然滚动而非被裁剪；
+       内容不超出时保持垂直居中（min-height 撑满 + flex 居中） */
+    body { overflow-y: auto; }
+    .stage {
+      padding-top: 64px;
+      height: auto;
+      min-height: 100dvh;
+    }
+    /* 移动端压缩 hero 垂直间距，让 4 行入口尽量少滚动 */
+    .hero-tag { font-size: 13px; letter-spacing: 0.26em; margin-bottom: 12px; }
+    .hero-sub { font-size: 15px; letter-spacing: 0.08em; margin-top: 8px; }
+    .searchbar { height: 54px; padding-left: 16px; margin-top: 20px; }
     .search-go { padding: 0 18px; font-size: 15px; }
     .links-grid { grid-template-columns: repeat(3, 1fr); max-width: 430px; gap: 10px; }
     .links-grid.editing { grid-template-columns: repeat(2, 1fr); max-width: 300px; }
-    .qcard { padding: 14px 6px 12px; gap: 9px; }
-    .qmono { width: 42px; height: 42px; font-size: 21px; border-radius: 13px; }
+    .qmono { border-radius: 12px; }
     .qname { font-size: 13.5px; }
     .copyright { right: 14px; bottom: 12px; font-size: 12px; }
-    .add-card { min-height: 108px; gap: 10px; }
     .card-actions { opacity: 1; }
     .modal { padding: 24px 20px 22px; }
   }
@@ -637,12 +732,22 @@
       </span>
       <span class="brand-name">课速通<em>Course-Thru</em></span>
     </a>
-    <span class="clock-pill" role="status" aria-label="当前时间">
-      <span class="live-dot"></span>
-      <span class="clock-time" id="clockTime">--:--</span>
-      <span class="clock-sec" id="clockSec">--</span>
-      <span class="clock-tz" id="clockTz">CST</span>
-    </span>
+    <div class="topbar-right">
+      <!-- 版本 pill（Liquid Glass，构建时注入版本号） -->
+      <span class="version-pill glass" role="status" aria-label="程序版本">
+        <span class="glass-shine"></span>
+        <svg class="pill-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"></path>
+        </svg>
+        <span class="pill-text" id="versionText">v__VERSION__</span>
+      </span>
+      <span class="clock-pill" role="status" aria-label="当前时间">
+        <span class="live-dot"></span>
+        <span class="clock-time" id="clockTime">--:--</span>
+        <span class="clock-sec" id="clockSec">--</span>
+        <span class="clock-tz" id="clockTz">CST</span>
+      </span>
+    </div>
   </header>
 
   <main class="stage">
@@ -681,6 +786,16 @@
 
   </main>
 
+  <!-- 左下角反馈按钮：跳转飞书反馈表单 -->
+  <a class="feedback-btn glass" id="feedbackBtn" href="https://zcnxkzym5740.feishu.cn/share/base/form/shrcnak0wsQxurCqxYbw2WPsJTf" target="_blank" rel="noopener" aria-label="反馈按钮">
+    <span class="glass-shine"></span>
+    <svg class="fb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5 8.38 8.38 0 0 1 8.5 8.5Z"></path>
+      <path d="M8.5 10.5h7M8.5 14h4.5"></path>
+    </svg>
+    <span>反馈按钮</span>
+  </a>
+
   <a class="copyright" href="https://github.com/IceFireIcer" target="_blank" rel="noopener">2026 © IceFire_Icer All rights reserved.</a>
 
   <!-- 编辑弹窗 -->
@@ -707,17 +822,21 @@
   <script>
     /* ================================================================
        快捷入口数据：localStorage 驱动
-       - key: course-thru-links-v1
+       - key: course-thru-links-v2（v1 → v2 使旧缓存失效，自动套用新的 10 平台默认列表）
        - 结构: [{ name, url }]
        - 首次访问无缓存时使用 DEFAULT_LINKS
        ================================================================ */
-    const LINKS_KEY = 'course-thru-links-v1';
+    const LINKS_KEY = 'course-thru-links-v2';
     const DEFAULT_LINKS = [
       { name: '学习通', url: 'https://i.chaoxing.com' },
       { name: '中国大学MOOC', url: 'https://www.icourse163.org' },
+      { name: '智慧树', url: 'https://www.zhihuishu.com' },
+      { name: '雨课堂', url: 'https://www.yuketang.cn' },
+      { name: '学银在线', url: 'https://www.xueyinonline.com' },
       { name: '智慧职教', url: 'https://www.icve.com.cn/index' },
-      { name: '云班课', url: 'https://www.mosoteach.cn/' },
-      { name: '浙江在线课程中心', url: 'http://www.zjooc.org.cn/' },
+      { name: '学堂在线', url: 'https://www.xuetangx.com' },
+      { name: '国家高等教育智慧教育平台', url: 'https://higher.smartedu.cn' },
+      { name: '浙江省高等学校在线开放课程管理中心', url: 'http://www.zjooc.org.cn' },
       { name: 'DeepSeek', url: 'https://chat.deepseek.com/' }
     ];
 
@@ -823,6 +942,74 @@
     /* ================================================================
        渲染
        ================================================================ */
+
+    /* ================================================================
+       入口名称字号自适应（动态策略）
+       - 单行优先：名称短就尽量单行放大字号（一眼看清，无需换行）。
+       - 回退多行：名称过长导致单行字号过小（< NAME_SINGLE_MIN）时，
+         自动允许最多 NAME_MAX_LINES 行并调大字号，保证完整显示不截断。
+       - 触发时机：每次渲染后、字体加载完成后、窗口尺寸变化时重算。
+       ================================================================ */
+    const NAME_MAX_FONT = 22;       // 单行字号上限（px），短名可达
+    const NAME_MAX_FONT_MULTI = 18; // 多行字号上限（px）：长名称需换行，自动调小
+    const NAME_MIN_FONT = 11;       // 字号下限（px），可读性保底
+    const NAME_SINGLE_MIN = 15;     // 单行可接受的最小字号（px），低于此回退多行
+    const NAME_MAX_LINES = 3;       // 多行最多显示行数
+    const NAME_FONT_RATIO = 0.17;   // 单行上限字号与卡宽比例
+
+    // countNameLines 临时解除 line-clamp，返回名称在指定字号下的完整行数。
+    // 行数用 ceil 并留 0.01 浮点容差：3.17 行必须算作 4 行，否则长名称会被
+    // 误判为"放得下"而不降字号，最终 clamp 截断。
+    function countNameLines(nameEl, font) {
+      const prev = {
+        clamp: nameEl.style.webkitLineClamp,
+        overflow: nameEl.style.overflow,
+        display: nameEl.style.display,
+        orient: nameEl.style.webkitBoxOrient,
+      };
+      nameEl.style.webkitLineClamp = 'unset';
+      nameEl.style.overflow = 'visible';
+      nameEl.style.display = 'block';
+      nameEl.style.webkitBoxOrient = '';
+      nameEl.style.fontSize = font + 'px';
+      const lineH = parseFloat(getComputedStyle(nameEl).lineHeight) || font * 1.3;
+      const lines = Math.ceil(nameEl.scrollHeight / lineH - 0.01);
+      nameEl.style.webkitLineClamp = prev.clamp;
+      nameEl.style.overflow = prev.overflow;
+      nameEl.style.display = prev.display;
+      nameEl.style.webkitBoxOrient = prev.orient;
+      return lines;
+    }
+
+    // fitNameFontSize 遍历所有入口卡片，按名称长度动态决定字号：
+    // 先求单行内的最大字号；若单行字号小到不可读，则回退到多行并放大字号。
+    function fitNameFontSize() {
+      document.querySelectorAll('.qcard').forEach(card => {
+        const nameEl = card.querySelector('.qname');
+        if (!nameEl || !nameEl.textContent) return;
+        const cardW = card.getBoundingClientRect().width;
+        if (cardW <= 0) return;
+        const upper = Math.min(NAME_MAX_FONT, Math.max(NAME_MIN_FONT, cardW * NAME_FONT_RATIO));
+
+        // 1) 单行优先：在单行约束内找最大字号
+        let font = upper;
+        while (font > NAME_MIN_FONT && countNameLines(nameEl, font) > 1) font -= 0.5;
+
+        // 2) 单行字号过小（不可读）→ 回退到多行显示；
+        //    多行上限更低（NAME_MAX_FONT_MULTI），字多的名称自动调小字号
+        if (font < NAME_SINGLE_MIN) {
+          font = Math.min(NAME_MAX_FONT_MULTI, upper);
+          while (font > NAME_MIN_FONT && countNameLines(nameEl, font) > NAME_MAX_LINES) font -= 0.5;
+        }
+
+        // 最终行数按当前字号实测；clamp 到实际行数，恰好容纳、绝不截断。
+        // （若多行回退后字号仍超限，clamp 仍以实测行数封顶兜底）
+        const finalLines = countNameLines(nameEl, font);
+        nameEl.style.fontSize = font + 'px';
+        nameEl.style.webkitLineClamp = String(Math.min(NAME_MAX_LINES, Math.max(1, finalLines)));
+      });
+    }
+
     const ICON_SVG = {
       edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
       del: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>'
@@ -874,6 +1061,8 @@
       }
 
       bindGrid();
+      // 渲染完成后按名称长度动态收敛字号（短名放大、长名自动调小）
+      fitNameFontSize();
     }
 
     /* ================================================================
@@ -1077,7 +1266,7 @@
     mm.add('(min-width: 721px)', () => {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduce) {
-        gsap.set(['.bg-grid', '.glow', '.brand-logo', '.brand-name', '.clock-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright'],
+        gsap.set(['.bg-grid', '.glow', '.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright', '#feedbackBtn'],
           { opacity: 1, clearProps: 'all' });
         return;
       }
@@ -1088,6 +1277,7 @@
         .fromTo('.brand-logo', { scale: 0.4, opacity: 0, rotation: -14 },
           { scale: 1, opacity: 1, rotation: 0, duration: 0.9, ease: 'elastic.out(1, 0.6)' }, 0.1)
         .fromTo('.brand-name', { y: -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, 0.22)
+        .fromTo('.version-pill', { y: -16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, 0.22)
         .fromTo('.clock-pill', { y: -16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 }, 0.25)
         .fromTo('.hero-tag', { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.35)
         .fromTo(chars, { yPercent: 118, rotation: 8, opacity: 0 },
@@ -1098,7 +1288,9 @@
         .fromTo('.launch-label', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.0)
         .fromTo('.qcard', { y: 26, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.55, stagger: 0.05, ease: 'back.out(1.5)' }, 1.05)
-        .fromTo('#copyright', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 1.42);
+        .fromTo('#copyright', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 1.42)
+        .fromTo('#feedbackBtn', { y: 18, opacity: 0, scale: 0.9 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'back.out(1.6)' }, 1.38);
 
       gsap.to('.glow-a', { x: 40, y: 26, duration: 8, ease: 'sine.inOut', yoyo: true, repeat: -1 });
       gsap.to('.glow-b', { x: -32, y: -28, duration: 10, ease: 'sine.inOut', yoyo: true, repeat: -1 });
@@ -1107,13 +1299,14 @@
     mm.add('(max-width: 720px)', () => {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduce) {
-        gsap.set(['.brand-logo', '.brand-name', '.clock-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright'],
+        gsap.set(['.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright', '#feedbackBtn'],
           { opacity: 1, clearProps: 'all' });
         return;
       }
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
       tl.fromTo('.brand-logo', { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: 'back.out(1.4)' }, 0)
         .fromTo('.brand-name', { y: -10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.1)
+        .fromTo('.version-pill', { y: -12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.1)
         .fromTo('.clock-pill', { y: -12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 0.12)
         .fromTo('.hero-tag', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 0.25)
         .fromTo(chars, { yPercent: 115, opacity: 0 },
@@ -1123,7 +1316,9 @@
         .fromTo('.launch-label', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.8)
         .fromTo('.qcard', { y: 18, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.45, stagger: 0.05, ease: 'back.out(1.4)' }, 0.85)
-        .fromTo('#copyright', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.15);
+        .fromTo('#copyright', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.15)
+        .fromTo('#feedbackBtn', { y: 14, opacity: 0, scale: 0.9 },
+          { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 1.1);
       gsap.to('.glow-a', { x: 26, y: 18, duration: 9, ease: 'sine.inOut', yoyo: true, repeat: -1 });
       gsap.to('.glow-b', { x: -20, y: -18, duration: 11, ease: 'sine.inOut', yoyo: true, repeat: -1 });
     });
@@ -1165,10 +1360,43 @@
     });
 
     /* ================================================================
+       版本号注入与回退
+       - 构建时 build.ps1 会把 v__VERSION__ 占位符替换为 version.txt 的实际版本。
+       - 本地直接打开源码（未构建）时占位符仍在，回退显示 v-dev 提示。
+       ================================================================ */
+    const versionEl = document.getElementById('versionText');
+    if (versionEl && versionEl.textContent.includes('__VERSION__')) {
+      versionEl.textContent = 'v-dev';
+    }
+
+    /* ================================================================
+       Liquid Glass 扫光动画
+       - 每个 .glass 内的 .glass-shine 斜向光条用 gsap 无限循环横扫，
+         模拟液态玻璃表面的流动反光（错开各元素相位避免同频）。
+       - 尊重系统"减少动态效果"设置，开启时不运行动画。
+       ================================================================ */
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.glass-shine').forEach((shine, i) => {
+        // 从容器左侧完全隐藏处扫到右侧完全隐藏处（xPercent 相对光条自身宽度）
+        gsap.fromTo(shine,
+          { xPercent: -100 },
+          { xPercent: 320, duration: 2.6, ease: 'power2.inOut', repeat: -1, repeatDelay: 2.4, delay: i * 1.3 });
+      });
+    }
+
+    /* ================================================================
        启动
        ================================================================ */
     loadLinks();
     renderGrid();
+
+    /* 字号动态策略的补充触发：字体加载完成后 + 窗口尺寸变化时重算 */
+    document.fonts.ready.then(() => fitNameFontSize());
+    let fitTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(fitTimer);
+      fitTimer = setTimeout(fitNameFontSize, 120);
+    });
   </script>
 </body>
 </html>

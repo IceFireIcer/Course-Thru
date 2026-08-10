@@ -325,6 +325,15 @@ if (Test-Path $homepageDist) { Remove-Item $homepageDist -Recurse -Force }
 Copy-Item -LiteralPath $homepageSrc -Destination $homepageDist -Recurse -Force
 Info "已打包内置主页: $homepageSrc -> $homepageDist"
 
+# 注入版本号到内置主页右上角版本 pill：把 v__VERSION__ 占位符替换为
+# 当前版本号（单一来源 version.txt）。主页是 file:// 自包含静态文件，
+# 无法运行时读取版本文件，必须构建期文本替换（UTF-8 显式读写防乱码）。
+$homeIndex = Join-Path $homepageDist "index.html"
+$homeHtml = [System.IO.File]::ReadAllText($homeIndex, [System.Text.Encoding]::UTF8)
+$homeHtml = $homeHtml.Replace("v__VERSION__", "v$AppVersion")
+[System.IO.File]::WriteAllText($homeIndex, $homeHtml, [System.Text.UTF8Encoding]::new($false))
+Info "已注入版本号 v$AppVersion 到内置主页版本 pill"
+
 # 屏蔽 ScriptCat 安装成功欢迎页：unpacked 扩展每次启动都会触发
 # onInstalled(reason=install)，不屏蔽则每次打开浏览器都会弹出安装完成页。
 # 只把条件改为恒 false 以保留代码结构；若未来版本改动该段代码则警告。
