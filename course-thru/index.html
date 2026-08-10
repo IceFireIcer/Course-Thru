@@ -1266,7 +1266,7 @@
     mm.add('(min-width: 721px)', () => {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduce) {
-        gsap.set(['.bg-grid', '.glow', '.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright', '#feedbackBtn'],
+        gsap.set(['.bg-grid', '.glow', '.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '.copyright', '#feedbackBtn'],
           { opacity: 1, clearProps: 'all' });
         return;
       }
@@ -1288,7 +1288,7 @@
         .fromTo('.launch-label', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.0)
         .fromTo('.qcard', { y: 26, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.55, stagger: 0.05, ease: 'back.out(1.5)' }, 1.05)
-        .fromTo('#copyright', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 1.42)
+        .fromTo('.copyright', { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5 }, 1.42)
         .fromTo('#feedbackBtn', { y: 18, opacity: 0, scale: 0.9 },
           { y: 0, opacity: 1, scale: 1, duration: 0.6, ease: 'back.out(1.6)' }, 1.38);
 
@@ -1299,7 +1299,7 @@
     mm.add('(max-width: 720px)', () => {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (reduce) {
-        gsap.set(['.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '#copyright', '#feedbackBtn'],
+        gsap.set(['.brand-logo', '.brand-name', '.clock-pill', '.version-pill', '.hero-tag', '.brand-title .char', '.hero-sub', '.searchbar', '.launch-label', '.qcard', '.copyright', '#feedbackBtn'],
           { opacity: 1, clearProps: 'all' });
         return;
       }
@@ -1316,7 +1316,7 @@
         .fromTo('.launch-label', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 0.8)
         .fromTo('.qcard', { y: 18, opacity: 0 },
           { y: 0, opacity: 1, duration: 0.45, stagger: 0.05, ease: 'back.out(1.4)' }, 0.85)
-        .fromTo('#copyright', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.15)
+        .fromTo('.copyright', { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, 1.15)
         .fromTo('#feedbackBtn', { y: 14, opacity: 0, scale: 0.9 },
           { y: 0, opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 1.1);
       gsap.to('.glow-a', { x: 26, y: 18, duration: 9, ease: 'sine.inOut', yoyo: true, repeat: -1 });
