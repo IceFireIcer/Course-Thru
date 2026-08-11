@@ -1,0 +1,15 @@
+# 统一行尾策略：所有文本文件以 LF 检出/提交。
+# 原因：Windows 上 core.autocrlf=true 会把检出文件转成 CRLF，曾导致
+# gen-profile.mjs 解析 OCS 脚本元数据失败（@version 丢失，ScriptCat 显示版本 0.0）。
+# 现代工具（Go / Python / Node / PowerShell 5.1+ / Inno Setup）均兼容 LF。
+* text=auto eol=lf
+
+# 显式声明二进制文件，防止内容检测误判
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.key binary
+*.zip binary
+*.exe binary
+*.pem binary
