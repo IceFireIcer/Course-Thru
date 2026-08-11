@@ -10,6 +10,7 @@
 - 📜 **预置 OCS 网课助手 4.15.3**：脚本直接写入 ScriptCat 存储并**默认启用**，支持超星学习通、知到智慧树、职教云、智慧职教、中国大学MOOC、雨课堂等平台
 - ⚡ **开箱即用**：预置 profile 已开启「开发者模式」与「允许运行用户脚本」，OCS 已就绪；首次启动不弹任何引导页/信任提示
 - 🖥️ **默认最大化窗口**：每次启动都以最大化窗口打开（写死，不受首次启动限制约束）
+- 🌐 **强制中文界面**：启动参数 `--lang=zh-CN` 保证浏览器界面与网课平台（超星等按 Accept-Language 返回语言）始终为简体中文
 - 🚀 **启动器**：独立开发的 Windows 程序，首次启动部署预置数据并带参启动浏览器
 - 📦 **安装版**：Inno Setup 打包，下一步式安装 + 开始菜单/桌面快捷方式 + 卸载器
 - 🏠 **内置主页**：`course-thru/` 本地主页随程序分发，启动即打开（`file://` 自包含，离线可用）；预置 **10 个网课平台快捷入口**（横向铺开、按名称长度自动缩放字号）、右上角**版本号 pill**（Liquid Glass）、左下角**反馈按钮**（直达飞书反馈表单）；可在 `config.json` 里换成任意网址
@@ -75,6 +76,7 @@ extensions/baidu-search/        # 百度内置扩展（默认搜索引擎 + 新�
 course-thru/                    # 内置主页（10 网课入口 + 版本 pill + 反馈按钮；index.html + fonts/js/logo，全部相对路径，随程序分发）
 third-party-licenses/           # 第三方开源许可证原文（OCS=MIT、ScriptCat=GPL v3，合规署名）
 config.json.example             # 配置示例（默认页接口）
+.gitattributes                  # 统一行尾策略（全仓库 LF，防 Windows CRLF 检出破坏脚本解析）
 
 dist/                           # 便携发布目录（构建产物）
 ├── Course-Thru.exe             # 启动器
@@ -121,6 +123,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 - **品牌字样与版权署名靠构建期替换**：CDP 与企业策略都无法修改窗口标题模板、新标签页「自定义」按钮、设置「关于」页里的 "Chrome for Testing" 字样——这些字符串编译在 `locales\*.pak` 资源里。`patch-branding.py` 在 Chromium 解压后统一替换为 "Course-Thru 课速通"，并把 "Google LLC." 替换为 "IceFire_Icer."；`build.ps1` 还会替换 `ABOUT` 文件里的完整版权行。全部幂等可重复执行，升级 Chromium 版本后由构建自动重新打补丁
 - **品牌 logo 靠构建期替换资源**：Chrome 图标/产品 logo 编译在 `chrome_*.pak`、`resources.pak` 与 chrome.exe / chrome.dll 的 PE 资源里，同样无法用命令行或策略修改。构建期用 `generate-assets.py`（从 `logo/logo.png` 生成全套资源）、`patch-logo.py`（内容识别替换 pak 内 PNG）与 `patch-icons.py`（重建资源段替换 PE 图标）统一换成品牌 logo；ScriptCat 工具栏图标与 Inno Setup 安装包图标/向导图也一并替换
 - **只保留中英繁三语语言包**：构建时裁剪 Chromium `locales\*.pak`（保留 en-US / zh-CN / zh-TW，含性别变体）与 ScriptCat `_locales`（保留 en / zh_CN / zh_TW）。首选语言包缺失时 Chrome 自动回退 en-US、扩展回退 `default_locale`（en），程序不会报错；保留清单在 `build.ps1` 顶部的 `$KeepChromeLocales` / `$KeepExtLocales`
+- **统一 LF 行尾**：仓库通过 `.gitattributes` 强制所有文本文件以 LF 检出/提交，避免 Windows 的 CRLF 检出破坏构建脚本对脚本文件元数据的解析（曾致 OCS 在 ScriptCat 中显示版本 0.0 无法运行）
 
 ## 常见问题
 

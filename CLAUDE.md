@@ -30,7 +30,8 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 - 首启后 `dist\first_run.flag` 出现；
 - 默认搜索为百度（设置页标注「由扩展控制」）、**点击加号新建标签页直达百度**且无任何确认弹窗（测新标签页跳转须用真实点击/Ctrl+T 或扩展 SW 内 `chrome.tabs.create`，CDP `Target.createTarget` 创建的标签带 opener 会误判）；
 - 内置主页：右上角版本 pill 显示 `v<当前版本>`（构建期注入）、左下角反馈按钮可点开、10 个网课入口齐全且 DeepSeek 在最后、入场动画正常（版权元素 `.copyright` 与反馈按钮均参与 GSAP 入场，选择器用类不用 id）；
-- **会话不恢复**：打开多个标签页后关闭浏览器再启动，只打开默认页（启动参数含 `--disable-session-crashed-bubble`、无 restore 开关，且启动器每次清理 `Default/Sessions*`）。
+- **会话不恢复**：打开多个标签页后关闭浏览器再启动，只打开默认页（启动参数含 `--disable-session-crashed-bubble`、无 restore 开关，且启动器每次清理 `Default/Sessions*`）；
+- **界面为中文**：打开超星等网课平台显示中文界面（`--lang=zh-CN` 生效，`navigator.language` 应为 `zh-CN`）；ScriptCat 面板 OCS 版本显示 **4.15.3** 而非 0.0（0.0 = storage 元数据解析失败）。
 改过 `gen-profile.mjs` 时必须删掉 `dist\profile_seed` 重新生成并端到端验证。
 
 ### 版本与组件（固定，保证可复现）
@@ -43,9 +44,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 
 | 组件 | 作用 |
 |---|---|
-| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json（**loadConfig 强制保留 scriptcat 与 baidu-search 两扩展**，幂等去重，防用户自定义列表破坏预置数据）；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）；**每次启动清 `Default/Sessions*` 关闭会话恢复**；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能，含 `--disable-session-crashed-bubble` 禁崩溃恢复气泡）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
-| `build.ps1` | 构建流水线（步骤有编号注释）。幂等下载（直连失败自动回退系统代理）、语言裁剪、注入 key、调用各 patch 脚本 |
-| `gen-profile.mjs` | CDP 驱动真实 Chromium 生成 `profile_seed`：开开发者模式 + userScripts 开关，把 OCS 直接写入 ScriptCat 的 `chrome.storage.local`（status=1 默认启用），重启后验证。**信号驱动**（DOM 条件等待 + MutationObserver），不固定 sleep |
+| `main.go` | Go 启动器（GUI 子系统，无控制台窗口）。读 config.json（**loadConfig 强制保留 scriptcat 与 baidu-search 两扩展**，幂等去重，防用户自定义列表破坏预置数据）；首启复制 profile_seed→profile（**copyDir 并发 8 worker + 1MB 缓冲**）；**每次启动清 `Default/Sessions*` 关闭会话恢复**；组装 Chrome 参数（一大串 `--disable-*` 关闭谷歌功能，含 `--disable-session-crashed-bubble` 禁崩溃恢复气泡、**`--lang=zh-CN` 强制中文界面与 Accept-Language 头**——seed 缺 `intl.accept_languages` 时 Chromium 回退 en-US，超星等平台会返回英文界面）；写入 CfT 企业策略注册表（**整键一次查询、并行补写**）；修正 `Default/Preferences` 静默扩展接管弹窗（**UseNumber 保留精度**）；首启 `first_run.flag` 立即写入、CDP 关 ScriptCat 欢迎页放后台 goroutine |
+| `build.ps1` | 构建流水线（步骤有编号注释）。幂等下载（直连失败自动回退系统代理）、语言裁剪、注入 key、调用各 patch 脚本。**注意：build.ps1 不产出 portable zip**，发布便携版需手动把 dist 打包（Python zipfile，dist 平铺结构） |
+| `gen-profile.mjs` | CDP 驱动真实 Chromium 生成 `profile_seed`：开开发者模式 + userScripts 开关，把 OCS 直接写入 ScriptCat 的 `chrome.storage.local`（status=1 默认启用），重启后验证。**信号驱动**（DOM 条件等待 + MutationObserver），不固定 sleep。元数据解析**兼容 CRLF/LF 任意行尾**（解析前统一去 `\r`，曾因 CRLF 致全部元数据解析失败、OCS 版本显示 0.0）；验证环节除面板名字外还**读回 storage 校验 @version/@match 非空**（面板名字失败时回退默认值会骗过只查名字的验证）；launch 带 `--lang=zh-CN` 初始化 seed 语言 |
 | `patch-branding.py` | 构建期替换 `locales\*.pak` / `resources.pak` 里的 "Chrome for Testing" 品牌字样与 Google LLC 版权（幂等） |
 | `generate-assets.py` / `patch-logo.py` / `patch-icons.py` | 从 `logo/logo.png` 生成全套资产，替换 Chromium pak 内嵌图片与 chrome.exe / chrome.dll / 启动器 PE 图标（幂等） |
 | `extensions/baidu-search/` | 内置 MV3 扩展：默认搜索设为百度（chrome_settings_overrides）+ 新标签页跳百度（background.js 监听 chrome://newtab 并导航，**只按 URL 判断、不查 openerTabId**——Chrome 152 起 UI 新建标签页 openerTabId 也非空，查 opener 会误拦截用户点击加号；见「关键约束」） |
@@ -54,6 +55,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 | `installer.iss` | Inno Setup：桌面图标任务**默认勾选**；卸载跑 `stop-browser.ps1` 关进程 + 删 CfT 注册表策略 |
 | `keys/scriptcat.key` / `keys/baidu-search.key` | 固定扩展 ID 的公钥，**不可删除/重新生成**（ScriptCat=>hodgdaljmnbiliahlpcjcpiphnkbmfff，百度=>kjkhdfinhacckmpplnddgcbbpmncmfmk） |
 | `third-party-licenses/` | 第三方开源许可证原文（OCS=MIT、ScriptCat=GPL v3），合规保留原作者署名 |
+| `.gitattributes` | 全仓库统一行尾（`* text=auto eol=lf` + 二进制文件白名单）。**防 Windows 检出 CRLF 破坏脚本解析**（曾致 gen-profile 解析 OCS 元数据失败） |
 
 ## 关键技术决策（接手人必读）
 
@@ -76,6 +78,10 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 - **默认搜索用扩展而非策略**：`DefaultSearchProvider*`、`MetricsReportingEnabled`、`SafeBrowsingEnabled` 都是 sensitive 策略，未加入域的机器上会被 Chrome 直接忽略（chrome://policy 显示「错误, 已忽略」）；扩展的 `chrome_settings_overrides` 在 unpacked 扩展上直接生效（设置页标注「由扩展控制」）。UMA 上传改由 `--disable-background-networking` 在网络层关闭。
 - **UTF-8 读写**：build.ps1 改 UTF-8 文件（如 service_worker.js、manifest.json、version.txt）必须用 `[IO.File]::ReadAllText/WriteAllText` 显式指定 UTF-8 编码——PS 5.1 的 `Get-Content` 默认按 ANSI/GBK 解码会把中文读成乱码再写回，导致扩展语法损坏。**build.ps1 自身必须保持 UTF-8 BOM**：PS 5.1 读含中文脚本依赖 BOM，去 BOM 会报「Missing ')'」解析错误；编辑后需补回 `EF BB BF` 前缀。
 - **语言包裁剪**：Chromium locales 只留 en-US/zh-CN/zh-TW，ScriptCat _locales 只留 en/zh_CN/zh_TW；缺失时浏览器自动回退 en-US、扩展回退 default_locale，不报错。清单在 build.ps1 顶部 `$KeepChromeLocales` / `$KeepExtLocales`。
+- **CRLF 行尾会破坏元数据解析**（1.0.19 故障，已修复并预防）：git `core.autocrlf=true` 在 Windows 检出 CRLF，`split('\n')` 后每行带 `\r` 会卡住 `(.*)$` 正则 → gen-profile 解析 OCS 元数据全部失败 → ScriptCat 存储里 `metadata:{}` → 面板版本 0.0、脚本不注入。三重防线：gen-profile 解析前统一去 `\r`（根治）、`.gitattributes` 统一 eol=lf（防检出）、本机 `core.autocrlf=input`。教训：**验证不能只看 UI 文本**（名字解析失败会回退默认值骗过检查），必须校验数据内容。
+- **seed 语言初始化**：`--no-first-run` 会跳过 Chromium 首次运行初始化，seed 的 Preferences 只有 `intl.selected_languages` 而无 `accept_languages` → 运行时回退 en-US → 超星等平台英文界面。修复：main.go 启动参数 `--lang=zh-CN`（命令行优先级最高，每次启动覆盖）+ gen-profile launch 带 `--lang`（seed 侧兜底）。
+- **构建时勿关 gen-profile 弹出的浏览器窗口**：gen-profile 会用真实 Chromium 弹窗操作（开发者模式开关、写存储、验证面板），构建期间关闭窗口会致 CDP 连接断开、构建失败（`CDP WebSocket 连接已关闭`）。构建 ~8-10 分钟，期间不要碰弹出的窗口。
+- **release notes 勿裸写 `@xxx`**：GitHub 会把 notes 里的 `@match` 之类渲染成用户提及，新版 release 页的 Contributors 区块会展示被提及用户（用户不存在则显示裸文本，如 "match"）。需写 `@version`/`@match` 等字样时用反引号代码格式。
 
 ## 运行时数据流（首次启动）
 
@@ -85,9 +91,9 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Version 1.1.0
 4. 写入 9 条 CfT 企业策略（整键一次查询、值缺失或不对才**并行补写**；登录/同步/后台运行/安全浏览上报等）。
 5. 启动地址：`defaultUrl` 留空 → 内置主页 `course-thru/index.html`（file://）；相对路径 → 解析为 file:// URL；完整网址 → 原样打开。
 
-## 本地文档（gitignore 不入库，排查/扩展时必读）
+## 文档（排查/扩展时必读）
 
-HANDOVER.md（完整交接：阶段回顾、机制详解、待办）、VERSION.md（版本递增规则）、OPEN-VERSION-GUIDE.md（扩展接管静默、新标签页直达百度方案）、BRANDING-PATCH.md（品牌字样替换+语言包裁剪）、LOGO-REPLACEMENT.md（logo 全链路替换+验证清单）、CONSOLE-POLICY-NOTES.md（cmd 黑框屏蔽+CfT 策略生命周期）均为**本地维护、不入库**，改完不必推送。仓库入库文档只有 README.md、AGENTS.md，另含 LICENSE（GPL v3）与 `third-party-licenses/`（第三方许可证原文）。
+**HANDOVER.md 已入库**（2026-08-12 起随仓库维护，完整交接：阶段回顾、机制详解、待办）。以下仍为**本地维护、不入库**（gitignore），改完不必推送：VERSION.md（版本递增规则）、OPEN-VERSION-GUIDE.md（扩展接管静默、新标签页直达百度方案）、BRANDING-PATCH.md（品牌字样替换+语言包裁剪）、LOGO-REPLACEMENT.md（logo 全链路替换+验证清单）、CONSOLE-POLICY-NOTES.md（cmd 黑框屏蔽+CfT 策略生命周期）。仓库入库文档：README.md、AGENTS.md、CLAUDE.md、HANDOVER.md，另含 LICENSE（GPL v3）与 `third-party-licenses/`（第三方许可证原文）。
 
 ## 约定
 

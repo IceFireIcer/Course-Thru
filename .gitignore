@@ -19,9 +19,8 @@
 /.agents/
 /skills-lock.json
 
-# ===== 手动交接/技术指南/版本方案文档（本地保留，不入库）=====
-/HANDOVER.md
-*handover*.md
+# ===== 技术指南/版本方案文档（本地保留，不入库）=====
+# HANDOVER.md 已于 2026-08-12 入库（完整交接文档随仓库维护）
 /BRANDING-PATCH.md
 /CONSOLE-POLICY-NOTES.md
 /LOGO-REPLACEMENT.md
