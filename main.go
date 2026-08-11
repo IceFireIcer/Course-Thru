@@ -119,6 +119,10 @@ func main() {
 		"--no-default-browser-check",
 		// 每次启动都以最大化窗口打开（写死，不受首次运行限制约束）。
 		"--start-maximized",
+		// 强制界面与 Accept-Language 头使用简体中文：seed 未预置
+		// intl.accept_languages 时 Chromium 默认 en-US，会导致超星等
+		// 网课平台按英文界面返回。
+		"--lang=zh-CN",
 		// 抑制 Chrome for Testing 的"仅用于自动化测试"横幅（--disable-infobars 对 CfT 有效）
 		"--disable-infobars",
 		// 关闭涉及谷歌的功能：本程序面向国内网课场景，不需要谷歌账号与云端服务。
