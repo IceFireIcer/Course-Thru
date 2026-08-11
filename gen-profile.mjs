@@ -171,7 +171,10 @@ function parseUserscriptMeta(code) {
   const block = code.match(/\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/);
   if (!block) throw new Error('OCS 文件缺少 UserScript 元数据头');
   const meta = {};
-  for (const line of block[1].split('\n')) {
+  // 兼容 CRLF 行尾：git 检出（core.autocrlf）会把仓库里的 LF 转成 CRLF，
+  // 行尾 \r 会卡住 `(.*)$` 使整行匹配失败，导致全部元数据解析为空（曾致
+  // OCS 在 ScriptCat 中显示版本 0.0、脚本无法注入）。先统一去掉 \r。
+  for (const line of block[1].replace(/\r/g, '').split('\n')) {
     const m = line.match(/^\s*\/\/\s+@([\w-]+)\s*(.*)$/);
     if (!m) continue;
     const key = m[1].toLowerCase();
@@ -267,6 +270,9 @@ function launch() {
     `--load-extension=${extDir}`,
     '--no-first-run',
     '--no-default-browser-check',
+    // 指定中文，让 seed 的 intl.accept_languages 初始化为 zh-CN，
+    // 避免超星等网课平台按 en-US 返回英文界面（运行时由启动器 --lang 兜底）
+    '--lang=zh-CN',
     `--remote-debugging-port=${port}`,
     '--window-size=960,720',
     'about:blank',
@@ -426,6 +432,23 @@ try {
     const dump = await evalIn(cdp3, `(() => ({ url: location.href, title: document.title, text: (document.body ? document.body.textContent : '').slice(0, 400) }))()`);
     console.log('[gen-profile] 验证失败时页面状态:', JSON.stringify(dump));
     throw new Error('验证失败：脚本猫管理面板未找到 OCS 网课助手');
+  }
+  // 面板出现名字只证明条目存在——名字失败时会回退默认值，metadata 解析失败
+  // （如 CRLF 行尾问题）同样能通过。必须再从 storage 校验 @version/@match 完整。
+  const stCheck = await evalIn(cdp3, `(async () => {
+    const key = 'script:${ocsEntry.uuid}';
+    const got = await chrome.storage.local.get(key);
+    const s = got[key] || {};
+    const md = s.metadata || {};
+    return {
+      name: s.name || '',
+      version: (md.version && md.version[0]) || null,
+      matchCount: (md.match && md.match.length) || 0,
+    };
+  })()`);
+  console.log('[gen-profile] storage 校验:', JSON.stringify(stCheck));
+  if (!stCheck.version || stCheck.matchCount < 1) {
+    throw new Error('验证失败：OCS 条目 metadata 未解析出 @version/@match，脚本无法被 ScriptCat 正确加载');
   }
   cdp3.close();
 
